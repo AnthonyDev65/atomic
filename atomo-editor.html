@@ -1,0 +1,1108 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Átomo - Editor 3D</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0a0a0f; overflow: hidden; font-family: 'Segoe UI', sans-serif; }
+  canvas { display: block; cursor: pointer; }
+  #info {
+    position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
+    color: rgba(255,255,255,0.3); font-family: monospace; font-size: 12px;
+    letter-spacing: 0.1em; pointer-events: none;
+  }
+  #panel {
+    position: absolute; top: 16px; right: 16px; width: 280px;
+    background: rgba(15, 15, 25, 0.95); border: 1px solid rgba(100, 130, 255, 0.3);
+    border-radius: 12px; padding: 16px; color: #ccc; font-size: 13px;
+    backdrop-filter: blur(10px); display: none; max-height: 90vh; overflow-y: auto;
+  }
+  #panel.visible { display: block; }
+  #panel h3 { margin: 0 0 12px 0; color: #88aaff; font-size: 14px; font-weight: 600; }
+  #panel .obj-name {
+    color: #fff; font-weight: 500; margin-bottom: 12px;
+    padding: 6px 10px; background: rgba(100, 130, 255, 0.1);
+    border-radius: 6px; word-break: break-all;
+  }
+  #panel label { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  #panel label span { min-width: 80px; }
+  #panel input[type="range"] { width: 100px; accent-color: #88aaff; }
+  #panel input[type="number"] {
+    width: 60px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.2);
+    color: #fff; border-radius: 4px; padding: 2px 4px; font-size: 12px; text-align: center;
+  }
+  #panel .value { min-width: 40px; text-align: right; color: #88aaff; font-family: monospace; font-size: 12px; }
+  #panel .section { margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1); }
+  #panel .section-title { color: #aaa; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+  #panel button {
+    width: 100%; margin-top: 8px; padding: 8px;
+    background: rgba(255, 80, 80, 0.2); border: 1px solid rgba(255, 80, 80, 0.4);
+    color: #ff8888; border-radius: 6px; cursor: pointer; font-size: 12px;
+  }
+  #panel button:hover { background: rgba(255, 80, 80, 0.3); }
+  #panel button.apply { background: rgba(80, 180, 80, 0.2); border-color: rgba(80, 180, 80, 0.4); color: #88ff88; }
+  #panel button.apply:hover { background: rgba(80, 180, 80, 0.3); }
+  #panel button.neutral { background: rgba(100, 130, 255, 0.15); border-color: rgba(100, 130, 255, 0.4); color: #aaccff; }
+  #panel button.neutral:hover { background: rgba(100, 130, 255, 0.25); }
+  #panel button.orbital-action { background: rgba(255, 170, 68, 0.2); border-color: rgba(255, 170, 68, 0.4); color: #ffcc88; }
+  #panel button.orbital-action:hover { background: rgba(255, 170, 68, 0.3); }
+  #layers-panel {
+    position: absolute; top: 16px; left: 16px; width: 250px;
+    background: rgba(15, 15, 25, 0.95); border: 1px solid rgba(100, 130, 255, 0.3);
+    border-radius: 12px; padding: 16px; color: #ccc; font-size: 13px;
+    backdrop-filter: blur(10px); max-height: 90vh; overflow-y: auto;
+    transition: transform 0.3s, opacity 0.3s;
+  }
+  #layers-panel.collapsed { transform: translateX(-260px); opacity: 0; pointer-events: none; }
+  #layers-panel h3 { margin: 0 0 12px 0; color: #88aaff; font-size: 14px; font-weight: 600; }
+  #panel.collapsed { transform: translateX(290px); opacity: 0; pointer-events: none; }
+  #panel { transition: transform 0.3s, opacity 0.3s; }
+  .toggle-btn {
+    position: absolute; top: 16px; width: 32px; height: 32px;
+    background: rgba(15, 15, 25, 0.9); border: 1px solid rgba(100, 130, 255, 0.3);
+    border-radius: 8px; color: #88aaff; font-size: 16px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    backdrop-filter: blur(10px); transition: opacity 0.3s; z-index: 50;
+  }
+  .toggle-btn:hover { background: rgba(100, 130, 255, 0.2); }
+  #toggleLeft { left: 16px; }
+  #toggleRight { right: 16px; }
+  .layer-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 8px; border-radius: 6px; margin-bottom: 4px;
+    cursor: pointer; transition: background 0.15s;
+  }
+  .layer-item:hover { background: rgba(100, 130, 255, 0.1); }
+  .layer-item.selected { background: rgba(100, 130, 255, 0.2); border: 1px solid rgba(100, 130, 255, 0.4); }
+  .layer-item .icon { font-size: 14px; }
+  .layer-item .name { flex: 1; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .layer-item .visibility { width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0.6; font-size: 12px; }
+  .layer-item .visibility:hover { opacity: 1; }
+  .layer-item .visibility.hidden { opacity: 0.3; }
+  #add-section { margin-top: 16px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1); }
+  #add-section .section-title { color: #aaa; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+  .add-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .add-btn {
+    padding: 8px 4px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15);
+    color: #ccc; border-radius: 6px; cursor: pointer; font-size: 11px; text-align: center; transition: all 0.15s;
+  }
+  .add-btn:hover { background: rgba(100, 130, 255, 0.2); border-color: rgba(100, 130, 255, 0.4); color: #fff; }
+  #color-picker { width: 100%; height: 30px; border: none; border-radius: 6px; cursor: pointer; background: transparent; margin-top: 8px; }
+  #move-indicator {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    background: rgba(15, 15, 25, 0.9); border: 1px solid rgba(100, 130, 255, 0.5);
+    border-radius: 8px; padding: 10px 20px; color: #88aaff;
+    font-family: monospace; font-size: 14px; pointer-events: none; display: none; z-index: 100;
+  }
+  #move-indicator.visible { display: block; }
+  #move-indicator .axis-x { color: #ff6666; }
+  #move-indicator .axis-y { color: #66ff66; }
+  #move-indicator .axis-z { color: #6666ff; }
+  #file-actions { margin-top: 16px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1); }
+  #file-actions .section-title { color: #aaa; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+  .file-btn {
+    width: 100%; padding: 8px; margin-bottom: 6px;
+    background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15);
+    color: #ccc; border-radius: 6px; cursor: pointer; font-size: 11px; text-align: center; transition: all 0.15s;
+  }
+  .file-btn:hover { background: rgba(100, 130, 255, 0.2); border-color: rgba(100, 130, 255, 0.4); color: #fff; }
+  .file-btn.export { background: rgba(80, 180, 80, 0.15); border-color: rgba(80, 180, 80, 0.3); color: #88ff88; }
+  .file-btn.export:hover { background: rgba(80, 180, 80, 0.25); }
+  .file-btn.import { background: rgba(100, 130, 255, 0.15); border-color: rgba(100, 130, 255, 0.3); color: #aaccff; }
+  .file-btn.import:hover { background: rgba(100, 130, 255, 0.25); }
+  #orbital-section { margin-top: 16px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1); }
+  #orbital-section .section-title { color: #ffaa44; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+  .orbital-config { display: flex; flex-direction: column; gap: 6px; }
+  .orbital-config label { display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: #ccc; }
+  .orbital-config input[type="number"] { width: 50px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.2); color: #fff; border-radius: 4px; padding: 3px 5px; font-size: 11px; text-align: center; }
+  .orbital-config input[type="color"] { width: 36px; height: 22px; border: none; cursor: pointer; background: transparent; }
+  .orbital-btn {
+    width: 100%; padding: 10px; margin-top: 8px;
+    background: rgba(255, 170, 68, 0.2); border: 1px solid rgba(255, 170, 68, 0.4);
+    color: #ffcc88; border-radius: 6px; cursor: pointer; font-size: 12px; text-align: center;
+    transition: all 0.15s; font-weight: 600;
+  }
+  .orbital-btn:hover { background: rgba(255, 170, 68, 0.3); color: #fff; }
+  .scale-input-row { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+  .scale-input-row span { min-width: 20px; color: #ccc; font-size: 12px; }
+  .scale-input-row input[type="number"] {
+    width: 70px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.2);
+    color: #fff; border-radius: 4px; padding: 4px 6px; font-size: 12px; text-align: center;
+  }
+</style>
+</head>
+<body>
+<div id="info">G=mover · X/Y/Z=eje · flechas=desplazar · Esc=cancelar · clic=seleccionar · scroll=zoom</div>
+<div id="move-indicator"><span id="move-text">MOVER</span></div>
+<button class="toggle-btn" id="toggleLeft" title="Mostrar/ocultar panel izquierdo">◀</button>
+<button class="toggle-btn" id="toggleRight" title="Mostrar/ocultar panel derecho">▶</button>
+
+<!-- Panel izquierdo -->
+<div id="layers-panel">
+  <h3>📋 Capas</h3>
+  <div id="layers-list"></div>
+  <div id="add-section">
+    <div class="section-title">➕ Agregar objeto</div>
+    <div class="add-grid">
+      <div class="add-btn" data-shape="sphere">⚪ Esfera</div>
+      <div class="add-btn" data-shape="box">⬜ Cubo</div>
+      <div class="add-btn" data-shape="torus">⭕ Torus/Anillo</div>
+      <div class="add-btn" data-shape="cylinder">🔷 Cilindro</div>
+      <div class="add-btn" data-shape="cone">🔺 Cono</div>
+      <div class="add-btn" data-shape="icosahedron">🔶 Icosaedro</div>
+      <div class="add-btn" data-shape="plane">📄 Plano</div>
+    </div>
+    <label style="margin-top:10px; display:block;">
+      <span style="font-size:11px; color:#aaa;">Color del nuevo objeto:</span>
+      <input type="color" id="color-picker" value="#ff4444">
+    </label>
+    <label style="margin-top:8px; display:block;">
+      <span style="font-size:11px; color:#aaa;">Etiqueta (solo esferas):</span>
+      <input type="text" id="new-obj-label" placeholder="P, N, e⁻..." maxlength="4"
+        style="width:100%; margin-top:4px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.2);
+        color:#fff; border-radius:4px; padding:6px 8px; font-size:13px; text-align:center;">
+    </label>
+    <label style="margin-top:8px; display:block;">
+      <span style="font-size:11px; color:#aaa;">Tamaño esfera:</span>
+      <input type="number" id="new-obj-size" min="0.05" max="5" step="0.05" value="0.5"
+        style="width:100%; margin-top:4px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.2);
+        color:#fff; border-radius:4px; padding:6px 8px; font-size:13px; text-align:center;">
+    </label>
+    <label style="margin-top:8px; display:block;">
+      <span style="font-size:11px; color:#aaa;">Rango posición aleatoria:</span>
+      <input type="number" id="new-obj-range" min="0.1" max="10" step="0.1" value="0.5"
+        style="width:100%; margin-top:4px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.2);
+        color:#fff; border-radius:4px; padding:6px 8px; font-size:13px; text-align:center;">
+    </label>
+  </div>
+  <div id="orbital-section">
+    <div class="section-title">⚛️ Crear Orbital</div>
+    <div class="orbital-config">
+      <label><span>Electrones:</span><input type="number" id="orbElectrons" min="1" max="8" value="3"></label>
+      <label><span>Radio orbital:</span><input type="number" id="orbRadius" min="0.5" max="10" step="0.1" value="1.5"></label>
+      <label><span>Tamaño núcleo:</span><input type="number" id="orbNucleusSize" min="0.1" max="2" step="0.1" value="0.4"></label>
+      <label><span>Tamaño electrón:</span><input type="number" id="orbElectronSize" min="0.05" max="0.5" step="0.05" value="0.15"></label>
+      <label><span>Color núcleo:</span><input type="color" id="orbNucleusColor" value="#ff4444"></label>
+      <label><span>Color electrón:</span><input type="color" id="orbElectronColor" value="#44aaff"></label>
+      <label><span>Color órbita:</span><input type="color" id="orbPathColor" value="#4466ff"></label>
+      <label><span>Velocidad:</span><input type="number" id="orbSpeed" min="0.5" max="10" step="0.5" value="2"></label>
+    </div>
+    <button class="orbital-btn" id="btnCreateOrbital">⚛️ Generar Orbital Completo</button>
+  </div>
+  <div id="file-actions">
+    <div class="section-title">💾 Proyecto</div>
+    <button class="file-btn export" id="btnExport">📤 Exportar proyecto (.atomo)</button>
+    <button class="file-btn import" id="btnImport">📥 Abrir proyecto (.atomo)</button>
+    <input type="file" id="fileInput" accept=".atomo,.json" style="display:none;">
+  </div>
+</div>
+
+<!-- Panel derecho: Propiedades -->
+<div id="panel">
+  <h3>🎛 Propiedades</h3>
+  <div class="obj-name" id="selectedName">—</div>
+
+  <div class="section">
+    <div class="section-title">🎨 Color</div>
+    <label>
+      <span>Color objeto</span>
+      <input type="color" id="objColor" value="#ffffff" style="width:50px; height:28px; border:none; cursor:pointer; background:transparent;">
+    </label>
+    <button class="apply" id="btnColor">✓ Aplicar color</button>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Posición</div>
+    <label><span>X</span><input type="number" id="posX" step="0.1" value="0"></label>
+    <label><span>Y</span><input type="number" id="posY" step="0.1" value="0"></label>
+    <label><span>Z</span><input type="number" id="posZ" step="0.1" value="0"></label>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Escala (valor libre)</div>
+    <label style="margin-bottom:10px; font-size:11px;">
+      <input type="checkbox" id="scaleUniform" checked style="accent-color:#88aaff; margin-right:6px;">
+      <span style="min-width:auto;">Escala uniforme (vincular ejes)</span>
+    </label>
+    <div class="scale-input-row"><span>X</span><input type="number" id="scaleX" step="0.1" min="0.01" value="1"></div>
+    <div class="scale-input-row"><span>Y</span><input type="number" id="scaleY" step="0.1" min="0.01" value="1"></div>
+    <div class="scale-input-row"><span>Z</span><input type="number" id="scaleZ" step="0.1" min="0.01" value="1"></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Rotación (grados)</div>
+    <div class="scale-input-row"><span>X</span><input type="number" id="rotStaticX" step="5" value="0"></div>
+    <div class="scale-input-row"><span>Y</span><input type="number" id="rotStaticY" step="5" value="0"></div>
+    <div class="scale-input-row"><span>Z</span><input type="number" id="rotStaticZ" step="5" value="0"></div>
+  </div>
+
+  <div class="section" id="thicknessSection" style="display:none;">
+    <div class="section-title">Grosor del tubo (Torus)</div>
+    <label><span>Grosor</span><input type="number" id="tubeThickness" min="0.01" max="2" step="0.01" value="0.1"></label>
+    <button class="neutral" id="btnThickness">↻ Regenerar con nuevo grosor</button>
+  </div>
+
+  <div class="section" id="torusSphereSection" style="display:none;">
+    <div class="section-title">⚪ Esferas en este anillo</div>
+    <label><span>Color esfera</span><input type="color" id="torusSphereColor" value="#44ff88" style="width:40px; height:24px; border:none; cursor:pointer; background:transparent;"></label>
+    <label><span>Tamaño</span><input type="number" id="torusSphereSize" min="0.05" max="1" step="0.05" value="0.15"></label>
+    <label><span>Velocidad</span><input type="number" id="torusSphereSpeed" min="0.5" max="10" step="0.5" value="2"></label>
+    <button class="orbital-action" id="btnAddOrbitingElectron">⚡ Agregar electrón orbitando</button>
+    <button class="orbital-action" id="btnApplyOrbitalSpeed">🔄 Aplicar velocidad a esta órbita</button>
+    <button class="orbital-action" id="btnAddSphereOnTorus">📌 Colocar esfera fija (mouse)</button>
+    <button class="neutral" id="btnStopAllFromTorus" style="margin-top:8px;">⏸ Detener TODAS las órbitas</button>
+    <button class="apply" id="btnResumeAllFromTorus">▶ Reanudar TODAS</button>
+  </div>
+
+  <div class="section" id="orbitalControlSection" style="display:none;">
+    <div class="section-title">⚡ Control orbital</div>
+    <button class="neutral" id="btnStopOrbital">⏸ Detener órbita de este electrón</button>
+    <button class="apply" id="btnResumeOrbital">▶ Reanudar órbita</button>
+    <button class="neutral" id="btnStopAllOrbitals" style="margin-top:12px;">⏸ Detener TODAS las órbitas</button>
+    <button class="apply" id="btnResumeAllOrbitals">▶ Reanudar TODAS</button>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Animación (rotación loop)</div>
+    <label><span>Rot X</span><input type="range" id="rotX" min="-3" max="3" step="0.1" value="0"><span class="value" id="rotXVal">0</span></label>
+    <label><span>Rot Y</span><input type="range" id="rotY" min="-3" max="3" step="0.1" value="0"><span class="value" id="rotYVal">0</span></label>
+    <label><span>Rot Z</span><input type="range" id="rotZ" min="-3" max="3" step="0.1" value="0"><span class="value" id="rotZVal">0</span></label>
+  </div>
+
+  <div class="section" id="labelSection" style="display:none;">
+    <div class="section-title">🏷 Etiqueta (texto sobre esfera)</div>
+    <label><span>Texto</span><input type="text" id="labelText" placeholder="P, N, e⁻..." maxlength="4"
+      style="width:80px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.2);
+      color:#fff; border-radius:4px; padding:4px 6px; font-size:13px; text-align:center;"></label>
+    <label><span>Color texto</span><input type="color" id="labelColor" value="#ffffff" style="width:40px; height:24px; border:none; cursor:pointer; background:transparent;"></label>
+    <button class="apply" id="btnLabel">✓ Aplicar etiqueta</button>
+  </div>
+
+  <button class="apply" id="btnApply">✓ Aplicar animación</button>
+  <button class="neutral" id="btnStop">⏸ Detener animación</button>
+  <button id="btnDelete">🗑 Eliminar objeto</button>
+  <button class="neutral" id="btnDeselect">Deseleccionar</button>
+</div>
+
+<script type="importmap">
+{ "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.01, 1000);
+camera.position.set(0, 2, 6);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(devicePixelRatio);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.2;
+document.body.appendChild(renderer.domElement);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.05;
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+const dirLight = new THREE.DirectionalLight(0x88aaff, 2);
+dirLight.position.set(5, 8, 5); scene.add(dirLight);
+const rimLight = new THREE.DirectionalLight(0x4466ff, 1);
+rimLight.position.set(-5, -2, -5); scene.add(rimLight);
+
+// ===== ESTADO =====
+const layers = [];
+let layerCounter = 0;
+const selectableMeshes = [];
+let selectedObject = null;
+let outlineMesh = null;
+const animaciones = new Map();
+const etiquetas = new Map();
+const orbitales = []; // { electron, center, radius, speed, angle, tiltX, tiltZ }
+
+// Modo mover
+let moveMode = false, moveAxis = null, moveStartPos = null;
+// Modo colocar esfera sobre torus
+let placingOnTorus = false, placingTorus = null, placingSphere = null;
+// Orbitales pausados
+const pausedOrbitales = [];
+
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+const DEG = Math.PI / 180;
+
+// ===== UI REFS =====
+const panel = document.getElementById('panel');
+const selectedName = document.getElementById('selectedName');
+const rotX = document.getElementById('rotX'), rotY = document.getElementById('rotY'), rotZ = document.getElementById('rotZ');
+const rotXVal = document.getElementById('rotXVal'), rotYVal = document.getElementById('rotYVal'), rotZVal = document.getElementById('rotZVal');
+const posX = document.getElementById('posX'), posY = document.getElementById('posY'), posZ = document.getElementById('posZ');
+const scaleXInput = document.getElementById('scaleX'), scaleYInput = document.getElementById('scaleY'), scaleZInput = document.getElementById('scaleZ');
+const thicknessSection = document.getElementById('thicknessSection');
+const tubeThickness = document.getElementById('tubeThickness');
+const torusSphereSection = document.getElementById('torusSphereSection');
+const layersList = document.getElementById('layers-list');
+const labelSection = document.getElementById('labelSection');
+const labelText = document.getElementById('labelText'), labelColor = document.getElementById('labelColor');
+const moveIndicator = document.getElementById('move-indicator'), moveTextEl = document.getElementById('move-text');
+const objColorInput = document.getElementById('objColor');
+
+// ===== UI EVENTS =====
+rotX.addEventListener('input', () => rotXVal.textContent = rotX.value);
+rotY.addEventListener('input', () => rotYVal.textContent = rotY.value);
+rotZ.addEventListener('input', () => rotZVal.textContent = rotZ.value);
+
+scaleXInput.addEventListener('input', () => {
+  if (!selectedObject) return;
+  const v = parseFloat(scaleXInput.value) || 1;
+  selectedObject.scale.x = v;
+  if (document.getElementById('scaleUniform').checked) {
+    selectedObject.scale.y = v; selectedObject.scale.z = v;
+    scaleYInput.value = v; scaleZInput.value = v;
+  }
+});
+scaleYInput.addEventListener('input', () => {
+  if (!selectedObject) return;
+  const v = parseFloat(scaleYInput.value) || 1;
+  selectedObject.scale.y = v;
+  if (document.getElementById('scaleUniform').checked) {
+    selectedObject.scale.x = v; selectedObject.scale.z = v;
+    scaleXInput.value = v; scaleZInput.value = v;
+  }
+});
+scaleZInput.addEventListener('input', () => {
+  if (!selectedObject) return;
+  const v = parseFloat(scaleZInput.value) || 1;
+  selectedObject.scale.z = v;
+  if (document.getElementById('scaleUniform').checked) {
+    selectedObject.scale.x = v; selectedObject.scale.y = v;
+    scaleXInput.value = v; scaleYInput.value = v;
+  }
+});
+
+posX.addEventListener('input', () => { if (selectedObject) selectedObject.position.x = parseFloat(posX.value) || 0; });
+posY.addEventListener('input', () => { if (selectedObject) selectedObject.position.y = parseFloat(posY.value) || 0; });
+posZ.addEventListener('input', () => { if (selectedObject) selectedObject.position.z = parseFloat(posZ.value) || 0; });
+
+// Rotación estática (en grados)
+const rotStaticX = document.getElementById('rotStaticX');
+const rotStaticY = document.getElementById('rotStaticY');
+const rotStaticZ = document.getElementById('rotStaticZ');
+rotStaticX.addEventListener('input', () => { if (selectedObject) selectedObject.rotation.x = (parseFloat(rotStaticX.value) || 0) * DEG; });
+rotStaticY.addEventListener('input', () => { if (selectedObject) selectedObject.rotation.y = (parseFloat(rotStaticY.value) || 0) * DEG; });
+rotStaticZ.addEventListener('input', () => { if (selectedObject) selectedObject.rotation.z = (parseFloat(rotStaticZ.value) || 0) * DEG; });
+
+document.getElementById('btnThickness').addEventListener('click', () => {
+  if (!selectedObject) return;
+  const layer = layers.find(l => l.id === selectedObject.uuid);
+  if (!layer || layer.type !== 'torus') return;
+  const thickness = parseFloat(tubeThickness.value);
+  const params = selectedObject.geometry.parameters || { radius: 0.5 };
+  const newGeo = new THREE.TorusGeometry(params.radius || 0.5, thickness, 16, 64);
+  selectedObject.geometry.dispose();
+  selectedObject.geometry = newGeo;
+});
+
+document.getElementById('btnApply').addEventListener('click', () => {
+  if (!selectedObject) return;
+  animaciones.set(selectedObject.uuid, { obj: selectedObject, speeds: { x: +rotX.value, y: +rotY.value, z: +rotZ.value } });
+});
+document.getElementById('btnStop').addEventListener('click', () => { if (selectedObject) animaciones.delete(selectedObject.uuid); });
+document.getElementById('btnDelete').addEventListener('click', () => { if (selectedObject) deleteObject(selectedObject); });
+document.getElementById('btnDeselect').addEventListener('click', () => deselect());
+
+// ===== CAMBIAR COLOR =====
+document.getElementById('btnColor').addEventListener('click', () => {
+  if (!selectedObject) return;
+  const newColor = objColorInput.value;
+  const layer = layers.find(l => l.id === selectedObject.uuid);
+  if (layer) layer.color = newColor;
+  const labelData = etiquetas.get(selectedObject.uuid);
+  if (labelData) {
+    applyLabel(selectedObject, labelData.text, labelData.color);
+  } else {
+    if (selectedObject.material.map) { selectedObject.material.map.dispose(); selectedObject.material.map = null; }
+    selectedObject.material.color.set(newColor);
+    selectedObject.material.needsUpdate = true;
+  }
+});
+
+// ===== ETIQUETAS =====
+document.getElementById('btnLabel').addEventListener('click', () => {
+  if (!selectedObject) return;
+  const text = labelText.value.trim();
+  if (!text) return;
+  applyLabel(selectedObject, text, labelColor.value);
+});
+
+function applyLabel(mesh, text, textColor) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1024; canvas.height = 1024;
+  const ctx = canvas.getContext('2d');
+  const layer = layers.find(l => l.id === mesh.uuid);
+  const baseColor = layer && layer.color ? layer.color : '#444444';
+  ctx.fillStyle = baseColor;
+  ctx.fillRect(0, 0, 1024, 1024);
+  ctx.fillStyle = textColor;
+  ctx.font = 'bold 320px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(text, 512, 512);
+  ctx.font = 'bold 200px Arial';
+  ctx.fillText(text, 512, 200); ctx.fillText(text, 512, 824);
+  ctx.fillText(text, 200, 512); ctx.fillText(text, 824, 512);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  const oldMat = mesh.material;
+  mesh.material = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.6, metalness: 0.0 });
+  if (oldMat) oldMat.dispose();
+  etiquetas.set(mesh.uuid, { text, color: textColor });
+  if (layer) { layer.name = `${text} (${layer.type})`; renderLayers(); }
+}
+
+function isSphere(obj) {
+  if (!obj || !obj.geometry) return false;
+  const t = obj.geometry.type || '';
+  return t.includes('Sphere') || t.includes('Icosahedron');
+}
+
+// ===== AGREGAR OBJETOS =====
+document.querySelectorAll('.add-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const shape = btn.dataset.shape;
+    const color = document.getElementById('color-picker').value;
+    const size = parseFloat(document.getElementById('new-obj-size').value) || 0.5;
+    const range = parseFloat(document.getElementById('new-obj-range').value) || 0.5;
+    addPrimitive(shape, color, { sphereRadius: size, randomRange: range });
+  });
+});
+
+function addPrimitive(shape, color, options = {}) {
+  let geometry, name;
+  const tubeT = options.tubeThickness || 0.1;
+  const sphereR = options.sphereRadius || 0.5;
+  const torusR = options.torusRadius || 0.5;
+  switch (shape) {
+    case 'sphere': geometry = new THREE.SphereGeometry(sphereR, 32, 32); name = 'Esfera'; break;
+    case 'box': geometry = new THREE.BoxGeometry(0.8, 0.8, 0.8); name = 'Cubo'; break;
+    case 'torus': geometry = new THREE.TorusGeometry(torusR, tubeT, 16, 64); name = 'Torus'; break;
+    case 'cylinder': geometry = new THREE.CylinderGeometry(0.4, 0.4, 1, 32); name = 'Cilindro'; break;
+    case 'cone': geometry = new THREE.ConeGeometry(0.5, 1, 32); name = 'Cono'; break;
+    case 'icosahedron': geometry = new THREE.IcosahedronGeometry(sphereR); name = 'Icosaedro'; break;
+    case 'plane': geometry = new THREE.PlaneGeometry(1, 1); name = 'Plano'; break;
+    default: geometry = new THREE.SphereGeometry(sphereR, 32, 32); name = 'Objeto';
+  }
+  const material = new THREE.MeshStandardMaterial({ color: new THREE.Color(color), roughness: 0.4, metalness: 0.3 });
+  const mesh = new THREE.Mesh(geometry, material);
+  const label = options.label !== undefined ? options.label : document.getElementById('new-obj-label').value.trim();
+  mesh.name = options.importName || (label ? label : `${name}_${++layerCounter}`);
+  if (options.position) mesh.position.set(options.position.x, options.position.y, options.position.z);
+  else {
+    const r = options.randomRange || 1;
+    mesh.position.set((Math.random()-0.5)*r*2, (Math.random()-0.5)*r*2, (Math.random()-0.5)*r*2);
+  }
+  if (options.scale) mesh.scale.set(options.scale.x, options.scale.y, options.scale.z);
+  if (options.rotation) mesh.rotation.set(options.rotation.x, options.rotation.y, options.rotation.z, 'XYZ');
+  scene.add(mesh);
+  selectableMeshes.push(mesh);
+  const layerName = options.importName || mesh.name;
+  layers.push({ id: mesh.uuid, name: layerName, obj: mesh, visible: true, type: shape, color });
+  if ((shape === 'sphere' || shape === 'icosahedron') && label && label.length > 0) {
+    applyLabel(mesh, label, options.labelColor || '#ffffff');
+  }
+  renderLayers();
+  return mesh;
+}
+
+// ===== CAPAS =====
+function renderLayers() {
+  layersList.innerHTML = '';
+  layers.forEach(layer => {
+    const div = document.createElement('div');
+    div.className = 'layer-item' + (selectedObject && selectedObject.uuid === layer.id ? ' selected' : '');
+    const icons = { sphere:'⚪', box:'⬜', torus:'⭕', cylinder:'🔷', cone:'🔺', icosahedron:'🔶', plane:'📄' };
+    div.innerHTML = `<span class="icon">${icons[layer.type]||'📦'}</span><span class="name">${layer.name}</span><span class="visibility ${layer.visible?'':'hidden'}">${layer.visible?'👁':'👁‍🗨'}</span>`;
+    div.querySelector('.name').addEventListener('click', () => selectObject(layer.obj));
+    div.querySelector('.visibility').addEventListener('click', (e) => { e.stopPropagation(); layer.visible = !layer.visible; layer.obj.visible = layer.visible; renderLayers(); });
+    layersList.appendChild(div);
+  });
+}
+
+// ===== SELECCIÓN =====
+renderer.domElement.addEventListener('click', (event) => {
+  if (event.target !== renderer.domElement) return;
+  if (moveMode) { confirmMove(); return; }
+  if (placingOnTorus) { confirmPlaceSphere(); return; }
+  mouse.x = (event.clientX / innerWidth) * 2 - 1;
+  mouse.y = -(event.clientY / innerHeight) * 2 + 1;
+  raycaster.setFromCamera(mouse, camera);
+  const hits = raycaster.intersectObjects(selectableMeshes, false);
+  if (hits.length > 0) selectObject(hits[0].object);
+});
+
+function selectObject(obj) {
+  removeOutline();
+  selectedObject = obj;
+  selectedName.textContent = obj.name || '(sin nombre)';
+  panel.classList.add('visible');
+
+  // Color actual
+  const layer = layers.find(l => l.id === obj.uuid);
+  objColorInput.value = layer && layer.color ? layer.color : '#' + (obj.material.color ? obj.material.color.getHexString() : 'ffffff');
+
+  // Etiqueta
+  if (isSphere(obj)) { labelSection.style.display = 'block'; const ld = etiquetas.get(obj.uuid); labelText.value = ld ? ld.text : ''; }
+  else labelSection.style.display = 'none';
+
+  // Posición
+  posX.value = obj.position.x.toFixed(2); posY.value = obj.position.y.toFixed(2); posZ.value = obj.position.z.toFixed(2);
+  // Escala
+  scaleXInput.value = obj.scale.x.toFixed(2); scaleYInput.value = obj.scale.y.toFixed(2); scaleZInput.value = obj.scale.z.toFixed(2);
+  // Rotación (convertir radianes a grados)
+  document.getElementById('rotStaticX').value = Math.round(obj.rotation.x / DEG);
+  document.getElementById('rotStaticY').value = Math.round(obj.rotation.y / DEG);
+  document.getElementById('rotStaticZ').value = Math.round(obj.rotation.z / DEG);
+
+  // Torus sections
+  if (layer && layer.type === 'torus') {
+    thicknessSection.style.display = 'block';
+    torusSphereSection.style.display = 'block';
+    const params = obj.geometry.parameters || {};
+    tubeThickness.value = params.tube || 0.1;
+  } else {
+    thicknessSection.style.display = 'none';
+    torusSphereSection.style.display = 'none';
+  }
+
+  // Orbital control: mostrar si este objeto es un electrón orbitando O si hay orbitales en general
+  const orbitalControlSection = document.getElementById('orbitalControlSection');
+  const isOrbiting = orbitales.some(o => o.electron === obj);
+  const wasPaused = pausedOrbitales.some(o => o.electron === obj);
+  if (isOrbiting || wasPaused || orbitales.length > 0 || pausedOrbitales.length > 0) {
+    orbitalControlSection.style.display = 'block';
+  } else {
+    orbitalControlSection.style.display = 'none';
+  }
+
+  // Animación
+  const anim = animaciones.get(obj.uuid);
+  if (anim) { rotX.value = anim.speeds.x; rotXVal.textContent = anim.speeds.x; rotY.value = anim.speeds.y; rotYVal.textContent = anim.speeds.y; rotZ.value = anim.speeds.z; rotZVal.textContent = anim.speeds.z; }
+  else { rotX.value=0; rotXVal.textContent='0'; rotY.value=0; rotYVal.textContent='0'; rotZ.value=0; rotZVal.textContent='0'; }
+
+  // Outline
+  const geo = obj.geometry.clone();
+  outlineMesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0x88aaff, wireframe: true, transparent: true, opacity: 0.4 }));
+  outlineMesh.position.copy(obj.position); outlineMesh.rotation.copy(obj.rotation);
+  outlineMesh.scale.copy(obj.scale).multiplyScalar(1.02);
+  outlineMesh.raycast = () => {};
+  scene.add(outlineMesh);
+  renderLayers();
+}
+
+function removeOutline() { if (outlineMesh) { outlineMesh.removeFromParent(); outlineMesh.geometry.dispose(); outlineMesh.material.dispose(); outlineMesh = null; } }
+function deselect() {
+  if (moveMode) cancelMove();
+  if (placingOnTorus) cancelPlaceSphere();
+  removeOutline();
+  selectedObject = null;
+  panel.classList.remove('visible');
+  renderLayers();
+}
+function deleteObject(obj) {
+  animaciones.delete(obj.uuid); etiquetas.delete(obj.uuid);
+  // Remove orbital references (activos y pausados)
+  for (let i = orbitales.length - 1; i >= 0; i--) { if (orbitales[i].electron === obj) orbitales.splice(i, 1); }
+  for (let i = pausedOrbitales.length - 1; i >= 0; i--) { if (pausedOrbitales[i].electron === obj) pausedOrbitales.splice(i, 1); }
+  const idx = selectableMeshes.indexOf(obj); if (idx > -1) selectableMeshes.splice(idx, 1);
+  const li = layers.findIndex(l => l.id === obj.uuid); if (li > -1) layers.splice(li, 1);
+  obj.removeFromParent(); if (obj.geometry) obj.geometry.dispose(); if (obj.material) obj.material.dispose();
+  deselect(); renderLayers();
+}
+
+// ===== ESFERA SOBRE TORUS (mover con mouse) =====
+document.getElementById('btnAddSphereOnTorus').addEventListener('click', () => {
+  if (!selectedObject) return;
+  const layer = layers.find(l => l.id === selectedObject.uuid);
+  if (!layer || layer.type !== 'torus') return;
+  startPlaceSphereOnTorus(selectedObject);
+});
+
+// ===== AGREGAR ELECTRÓN ORBITANDO =====
+document.getElementById('btnAddOrbitingElectron').addEventListener('click', () => {
+  if (!selectedObject) return;
+  const layer = layers.find(l => l.id === selectedObject.uuid);
+  if (!layer || layer.type !== 'torus') return;
+  const torus = selectedObject;
+  const params = torus.geometry.parameters || { radius: 0.5 };
+  const radius = params.radius || 0.5;
+  const color = document.getElementById('torusSphereColor').value;
+  const size = parseFloat(document.getElementById('torusSphereSize').value) || 0.15;
+  const speed = parseFloat(document.getElementById('torusSphereSpeed').value) || 2;
+
+  // Crear electrón
+  const electron = addPrimitive('sphere', color, {
+    position: {x: radius, y: 0, z: 0},
+    sphereRadius: size,
+    label: '',
+    importName: `e⁻_${layerCounter}`
+  });
+  electron.material.emissive = new THREE.Color(color);
+  electron.material.emissiveIntensity = 0.3;
+
+  const tiltX = torus.rotation.x;
+  const tiltZ = torus.rotation.z;
+  const orbData = { electron, center: torus.position.clone(), radius, speed, angle: 0, tiltX, tiltZ, parentTorus: torus };
+
+  // Determinar si los otros electrones de esta órbita están pausados
+  const othersArePaused = pausedOrbitales.some(o =>
+    Math.abs(o.tiltX - tiltX) < 0.01 &&
+    Math.abs(o.tiltZ - tiltZ) < 0.01 &&
+    Math.abs(o.radius - radius) < 0.01
+  );
+
+  if (othersArePaused) {
+    pausedOrbitales.push(orbData);
+  } else {
+    orbitales.push(orbData);
+  }
+
+  // Redistribuir equidistantemente todos los electrones en esta órbita
+  redistributeElectronsOnOrbit(tiltX, tiltZ, radius, speed);
+});
+
+// Redistribuir electrones equidistantes en una misma órbita (busca en activos Y pausados)
+function redistributeElectronsOnOrbit(tiltX, tiltZ, radius, speed) {
+  const matchOrbit = (o) =>
+    Math.abs(o.tiltX - tiltX) < 0.01 &&
+    Math.abs(o.tiltZ - tiltZ) < 0.01 &&
+    Math.abs(o.radius - radius) < 0.01;
+
+  const activeOnOrbit = orbitales.filter(matchOrbit);
+  const pausedOnOrbit = pausedOrbitales.filter(matchOrbit);
+  const all = [...activeOnOrbit, ...pausedOnOrbit];
+  const count = all.length;
+  if (count <= 1) return;
+  const step = (Math.PI * 2) / count;
+  all.forEach((orb, i) => {
+    orb.angle = step * i;
+    orb.speed = speed;
+  });
+  // Actualizar posición inmediata de todos para que se vean bien
+  all.forEach(orb => {
+    const x = orb.radius * Math.cos(orb.angle);
+    const y = orb.radius * Math.sin(orb.angle);
+    const pos = new THREE.Vector3(x, y, 0);
+    if (orb.parentTorus) {
+      pos.x *= orb.parentTorus.scale.x;
+      pos.y *= orb.parentTorus.scale.y;
+      pos.z *= orb.parentTorus.scale.z;
+      pos.applyEuler(orb.parentTorus.rotation);
+      pos.add(orb.parentTorus.position);
+    } else {
+      pos.applyEuler(new THREE.Euler(orb.tiltX, 0, orb.tiltZ));
+      pos.add(orb.center);
+    }
+    orb.electron.position.copy(pos);
+  });
+}
+
+// ===== DETENER / REANUDAR ÓRBITA =====
+document.getElementById('btnStopOrbital').addEventListener('click', () => {
+  if (!selectedObject) return;
+  const idx = orbitales.findIndex(o => o.electron === selectedObject);
+  if (idx > -1) {
+    pausedOrbitales.push(orbitales[idx]);
+    orbitales.splice(idx, 1);
+  }
+});
+
+document.getElementById('btnResumeOrbital').addEventListener('click', () => {
+  if (!selectedObject) return;
+  const idx = pausedOrbitales.findIndex(o => o.electron === selectedObject);
+  if (idx > -1) {
+    orbitales.push(pausedOrbitales[idx]);
+    pausedOrbitales.splice(idx, 1);
+  }
+});
+
+// Detener/Reanudar TODAS las órbitas
+function stopAllOrbitals() {
+  while (orbitales.length > 0) {
+    pausedOrbitales.push(orbitales.pop());
+  }
+}
+function resumeAllOrbitals() {
+  while (pausedOrbitales.length > 0) {
+    orbitales.push(pausedOrbitales.pop());
+  }
+}
+document.getElementById('btnStopAllOrbitals').addEventListener('click', stopAllOrbitals);
+document.getElementById('btnResumeAllOrbitals').addEventListener('click', resumeAllOrbitals);
+document.getElementById('btnStopAllFromTorus').addEventListener('click', stopAllOrbitals);
+document.getElementById('btnResumeAllFromTorus').addEventListener('click', resumeAllOrbitals);
+
+// Aplicar velocidad a todos los electrones de la órbita del torus seleccionado
+document.getElementById('btnApplyOrbitalSpeed').addEventListener('click', () => {
+  if (!selectedObject) return;
+  const layer = layers.find(l => l.id === selectedObject.uuid);
+  if (!layer || layer.type !== 'torus') return;
+  const torus = selectedObject;
+  const tiltX = torus.rotation.x;
+  const tiltZ = torus.rotation.z;
+  const params = torus.geometry.parameters || { radius: 0.5 };
+  const radius = params.radius || 0.5;
+  const newSpeed = parseFloat(document.getElementById('torusSphereSpeed').value) || 2;
+
+  const matchOrbit = (o) =>
+    Math.abs(o.tiltX - tiltX) < 0.01 &&
+    Math.abs(o.tiltZ - tiltZ) < 0.01 &&
+    Math.abs(o.radius - radius) < 0.01;
+
+  orbitales.filter(matchOrbit).forEach(o => o.speed = newSpeed);
+  pausedOrbitales.filter(matchOrbit).forEach(o => o.speed = newSpeed);
+});
+
+function startPlaceSphereOnTorus(torus) {
+  const color = document.getElementById('torusSphereColor').value;
+  const size = parseFloat(document.getElementById('torusSphereSize').value) || 0.2;
+  const sphere = addPrimitive('sphere', color, {
+    position: {x:0, y:0, z:0},
+    sphereRadius: size,
+    label: '',
+    importName: `e_${layerCounter}`
+  });
+
+  placingOnTorus = true;
+  placingTorus = torus;
+  placingSphere = sphere;
+  controls.enabled = false;
+  positionSphereOnTorus(0);
+}
+
+function positionSphereOnTorus(angle) {
+  if (!placingTorus || !placingSphere) return;
+  const params = placingTorus.geometry.parameters || { radius: 0.5 };
+  const R = params.radius || 0.5;
+  const sx = placingTorus.scale.x, sy = placingTorus.scale.y, sz = placingTorus.scale.z;
+  // Punto en el torus (plano XZ del torus, luego transformar)
+  const x = R * sx * Math.cos(angle);
+  const z = R * sz * Math.sin(angle);
+  // Aplicar rotación y posición del torus
+  const point = new THREE.Vector3(x, 0, z);
+  point.applyEuler(placingTorus.rotation);
+  point.add(placingTorus.position);
+  placingSphere.position.copy(point);
+}
+
+function confirmPlaceSphere() {
+  placingOnTorus = false; placingTorus = null; placingSphere = null;
+  controls.enabled = true;
+}
+function cancelPlaceSphere() {
+  if (placingSphere) deleteObject(placingSphere);
+  placingOnTorus = false; placingTorus = null; placingSphere = null;
+  controls.enabled = true;
+}
+
+// Mouse move para posicionar esfera sobre torus
+let placingAngle = 0;
+renderer.domElement.addEventListener('mousemove', (e) => {
+  if (!placingOnTorus || !placingTorus || !placingSphere) return;
+  // Calcular ángulo basado en posición del mouse relativa al centro del torus en pantalla
+  const torusScreenPos = placingTorus.position.clone().project(camera);
+  const cx = (torusScreenPos.x + 1) / 2 * innerWidth;
+  const cy = (-torusScreenPos.y + 1) / 2 * innerHeight;
+  const dx = e.clientX - cx;
+  const dy = e.clientY - cy;
+  placingAngle = Math.atan2(dy, dx);
+  positionSphereOnTorus(placingAngle);
+});
+
+// ===== CREAR ORBITAL COMPLETO =====
+document.getElementById('btnCreateOrbital').addEventListener('click', () => {
+  const numElectrons = parseInt(document.getElementById('orbElectrons').value) || 3;
+  const radius = parseFloat(document.getElementById('orbRadius').value) || 1.5;
+  const nucleusSize = parseFloat(document.getElementById('orbNucleusSize').value) || 0.4;
+  const electronSize = parseFloat(document.getElementById('orbElectronSize').value) || 0.15;
+  const nucleusColor = document.getElementById('orbNucleusColor').value;
+  const electronColor = document.getElementById('orbElectronColor').value;
+  const pathColor = document.getElementById('orbPathColor').value;
+  const speed = parseFloat(document.getElementById('orbSpeed').value) || 2;
+
+  // Crear núcleo usando addPrimitive con escala para el tamaño
+  addPrimitive('sphere', nucleusColor, { position: {x:0,y:0,z:0}, scale: {x:nucleusSize*2, y:nucleusSize*2, z:nucleusSize*2}, label: '' });
+
+  // Crear electrones con órbitas
+  for (let i = 0; i < numElectrons; i++) {
+    const angle = (Math.PI * 2 / numElectrons) * i;
+    const tiltX = (Math.random() - 0.5) * Math.PI * 0.8;
+    const tiltZ = (Math.random() - 0.5) * Math.PI * 0.8;
+
+    // Crear torus (órbita visual) via addPrimitive
+    const torus = addPrimitive('torus', pathColor, {
+      position: {x:0, y:0, z:0},
+      rotation: {x: Math.PI/2 + tiltX, y: 0, z: tiltZ},
+      tubeThickness: 0.015,
+      torusRadius: radius,
+      label: '',
+      importName: `Órbita_${layerCounter}`
+    });
+    // Hacer semi-transparente
+    torus.material.transparent = true;
+    torus.material.opacity = 0.6;
+
+    // Crear electrón via addPrimitive
+    const electron = addPrimitive('sphere', electronColor, {
+      position: {x: radius, y: 0, z: 0},
+      sphereRadius: electronSize,
+      label: '',
+      importName: `e⁻_${layerCounter}`
+    });
+    // Emissive glow
+    electron.material.emissive = new THREE.Color(electronColor);
+    electron.material.emissiveIntensity = 0.3;
+    electron.material.roughness = 0.2;
+    electron.material.metalness = 0.5;
+
+    // Registrar orbital para animación
+    orbitales.push({ electron, center: new THREE.Vector3(0,0,0), radius, speed, angle: angle, tiltX: Math.PI/2 + tiltX, tiltZ, parentTorus: torus });
+  }
+  renderLayers();
+});
+
+// ===== MODO MOVER (Blender) =====
+function enterMoveMode() { if (!selectedObject) return; moveMode = true; moveAxis = null; moveStartPos = selectedObject.position.clone(); controls.enabled = false; updateMoveIndicator(); }
+function cancelMove() { if (!moveMode || !selectedObject) return; selectedObject.position.copy(moveStartPos); exitMoveMode(); updatePositionUI(); }
+function confirmMove() { exitMoveMode(); updatePositionUI(); }
+function exitMoveMode() { moveMode = false; moveAxis = null; moveStartPos = null; controls.enabled = true; moveIndicator.classList.remove('visible'); }
+function updateMoveIndicator() {
+  if (!moveMode) { moveIndicator.classList.remove('visible'); return; }
+  moveIndicator.classList.add('visible');
+  if (!moveAxis) moveTextEl.innerHTML = 'MOVER — <span class="axis-x">X</span> <span class="axis-y">Y</span> <span class="axis-z">Z</span> para eje';
+  else if (moveAxis==='x') moveTextEl.innerHTML = 'Eje <span class="axis-x">X</span> ←→';
+  else if (moveAxis==='y') moveTextEl.innerHTML = 'Eje <span class="axis-y">Y</span> ↑↓';
+  else if (moveAxis==='z') moveTextEl.innerHTML = 'Eje <span class="axis-z">Z</span> ←→';
+}
+function updatePositionUI() { if (!selectedObject) return; posX.value = selectedObject.position.x.toFixed(2); posY.value = selectedObject.position.y.toFixed(2); posZ.value = selectedObject.position.z.toFixed(2); }
+
+// ===== EXPORTAR / IMPORTAR =====
+document.getElementById('btnExport').addEventListener('click', exportProject);
+document.getElementById('btnImport').addEventListener('click', () => document.getElementById('fileInput').click());
+document.getElementById('fileInput').addEventListener('change', (e) => {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => { try { importProject(JSON.parse(ev.target.result)); } catch(err) { alert('Error: ' + err.message); } };
+  reader.readAsText(file); e.target.value = '';
+});
+
+function exportProject() {
+  const data = { version: '1.1', app: 'atomo-editor', created: new Date().toISOString(), objects: [] };
+  layers.forEach(layer => {
+    const obj = layer.obj;
+    // Capturar posición real actual (para electrones orbitales, su posición actual)
+    const od = {
+      name: layer.name,
+      type: layer.type,
+      color: layer.color || '#ffffff',
+      position: { x: +obj.position.x.toFixed(4), y: +obj.position.y.toFixed(4), z: +obj.position.z.toFixed(4) },
+      rotation: { x: +obj.rotation.x.toFixed(4), y: +obj.rotation.y.toFixed(4), z: +obj.rotation.z.toFixed(4) },
+      scale: { x: +obj.scale.x.toFixed(4), y: +obj.scale.y.toFixed(4), z: +obj.scale.z.toFixed(4) },
+      visible: layer.visible
+    };
+    // Etiqueta
+    const lbl = etiquetas.get(layer.id);
+    if (lbl) { od.label = lbl.text; od.labelColor = lbl.color; }
+    // Animación de rotación
+    const anim = animaciones.get(layer.id);
+    if (anim) od.animation = { x: anim.speeds.x, y: anim.speeds.y, z: anim.speeds.z };
+    // Torus: guardar grosor real y radio
+    if (layer.type === 'torus' && obj.geometry.parameters) {
+      od.tubeThickness = obj.geometry.parameters.tube || 0.1;
+      od.torusRadius = obj.geometry.parameters.radius || 0.5;
+    }
+    // Esfera/Icosaedro: guardar radio de geometría
+    if ((layer.type === 'sphere' || layer.type === 'icosahedron') && obj.geometry.parameters) {
+      od.sphereRadius = obj.geometry.parameters.radius || 0.5;
+    }
+    // Orbital: si este electrón está en orbitales[], guardar datos orbitales
+    const orbData = orbitales.find(o => o.electron === obj);
+    const orbDataPaused = pausedOrbitales.find(o => o.electron === obj);
+    const orbInfo = orbData || orbDataPaused;
+    if (orbInfo) {
+      // Guardar índice del torus padre en el array de layers
+      let parentIndex = -1;
+      if (orbInfo.parentTorus) {
+        parentIndex = layers.findIndex(l => l.obj === orbInfo.parentTorus);
+      }
+      od.orbital = { radius: orbInfo.radius, speed: orbInfo.speed, angle: orbInfo.angle, tiltX: orbInfo.tiltX, tiltZ: orbInfo.tiltZ,
+        center: { x: orbInfo.center.x, y: orbInfo.center.y, z: orbInfo.center.z },
+        parentIndex };
+    }
+    data.objects.push(od);
+  });
+  const json = JSON.stringify(data, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = 'proyecto.atomo'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importProject(data) {
+  if (!data || !data.objects || !Array.isArray(data.objects)) { alert('Formato de archivo inválido'); return; }
+  clearScene();
+  // Primera pasada: crear todos los objetos
+  const importedMeshes = [];
+  data.objects.forEach(od => {
+    const mesh = addPrimitive(od.type, od.color, {
+      position: od.position,
+      scale: od.scale,
+      rotation: od.rotation,
+      label: od.label || '',
+      labelColor: od.labelColor || '#ffffff',
+      tubeThickness: od.tubeThickness || 0.1,
+      torusRadius: od.torusRadius || 0.5,
+      sphereRadius: od.sphereRadius || 0.5,
+      importName: od.name
+    });
+    importedMeshes.push(mesh);
+    if (!mesh) return;
+    if (od.visible === false) {
+      mesh.visible = false;
+      const l = layers.find(x => x.id === mesh.uuid);
+      if (l) l.visible = false;
+    }
+    if (od.animation) {
+      animaciones.set(mesh.uuid, { obj: mesh, speeds: { x: od.animation.x, y: od.animation.y, z: od.animation.z } });
+    }
+  });
+  // Segunda pasada: vincular orbitales con su torus padre por índice
+  data.objects.forEach((od, i) => {
+    if (od.orbital && importedMeshes[i]) {
+      const parentTorus = (od.orbital.parentIndex >= 0 && importedMeshes[od.orbital.parentIndex])
+        ? importedMeshes[od.orbital.parentIndex] : null;
+      orbitales.push({
+        electron: importedMeshes[i],
+        center: new THREE.Vector3(od.orbital.center.x, od.orbital.center.y, od.orbital.center.z),
+        radius: od.orbital.radius,
+        speed: od.orbital.speed,
+        angle: od.orbital.angle,
+        tiltX: od.orbital.tiltX,
+        tiltZ: od.orbital.tiltZ,
+        parentTorus
+      });
+    }
+  });
+  renderLayers();
+}
+
+function clearScene() {
+  removeOutline();
+  selectedObject = null;
+  panel.classList.remove('visible');
+  while (selectableMeshes.length > 0) {
+    const m = selectableMeshes.pop();
+    m.removeFromParent();
+    if (m.geometry) m.geometry.dispose();
+    if (m.material) m.material.dispose();
+  }
+  layers.length = 0;
+  animaciones.clear();
+  etiquetas.clear();
+  orbitales.length = 0;
+  pausedOrbitales.length = 0;
+  renderLayers();
+}
+
+// ===== TECLADO =====
+const MOVE_STEP = 0.1;
+window.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if (e.key === 'Escape') { if (moveMode) cancelMove(); else if (placingOnTorus) cancelPlaceSphere(); else deselect(); return; }
+  if ((e.key === 'g' || e.key === 'G') && !moveMode && selectedObject) { enterMoveMode(); return; }
+  if (moveMode) {
+    if (e.key === 'x' || e.key === 'X') { moveAxis = moveAxis==='x'?null:'x'; updateMoveIndicator(); return; }
+    if (e.key === 'y' || e.key === 'Y') { moveAxis = moveAxis==='y'?null:'y'; updateMoveIndicator(); return; }
+    if (e.key === 'z' || e.key === 'Z') { moveAxis = moveAxis==='z'?null:'z'; updateMoveIndicator(); return; }
+    if (e.key === 'Enter') { confirmMove(); return; }
+    if (e.key === 'ArrowRight') { e.preventDefault(); if (!moveAxis||moveAxis==='x') selectedObject.position.x += MOVE_STEP; if (moveAxis==='z') selectedObject.position.z += MOVE_STEP; updatePositionUI(); return; }
+    if (e.key === 'ArrowLeft') { e.preventDefault(); if (!moveAxis||moveAxis==='x') selectedObject.position.x -= MOVE_STEP; if (moveAxis==='z') selectedObject.position.z -= MOVE_STEP; updatePositionUI(); return; }
+    if (e.key === 'ArrowUp') { e.preventDefault(); if (!moveAxis||moveAxis==='y') selectedObject.position.y += MOVE_STEP; if (moveAxis==='z') selectedObject.position.z -= MOVE_STEP; updatePositionUI(); return; }
+    if (e.key === 'ArrowDown') { e.preventDefault(); if (!moveAxis||moveAxis==='y') selectedObject.position.y -= MOVE_STEP; if (moveAxis==='z') selectedObject.position.z += MOVE_STEP; updatePositionUI(); return; }
+    return;
+  }
+  if (selectedObject && !moveMode) {
+    if (e.key === 'ArrowRight') { e.preventDefault(); selectedObject.position.x += MOVE_STEP; updatePositionUI(); return; }
+    if (e.key === 'ArrowLeft') { e.preventDefault(); selectedObject.position.x -= MOVE_STEP; updatePositionUI(); return; }
+    if (e.key === 'ArrowUp') { e.preventDefault(); selectedObject.position.y += MOVE_STEP; updatePositionUI(); return; }
+    if (e.key === 'ArrowDown') { e.preventDefault(); selectedObject.position.y -= MOVE_STEP; updatePositionUI(); return; }
+  }
+  if (e.key === 'Delete' && selectedObject && !moveMode) deleteObject(selectedObject);
+});
+
+// ===== ANIMACIÓN =====
+const clock = new THREE.Clock();
+function animate() {
+  requestAnimationFrame(animate);
+  const delta = clock.getDelta();
+  // Rotaciones
+  animaciones.forEach(({ obj, speeds }) => { obj.rotation.x += speeds.x * delta; obj.rotation.y += speeds.y * delta; obj.rotation.z += speeds.z * delta; });
+  // Orbitales
+  orbitales.forEach(orb => {
+    orb.angle += orb.speed * delta;
+    const x = orb.radius * Math.cos(orb.angle);
+    const y = orb.radius * Math.sin(orb.angle);
+    const pos = new THREE.Vector3(x, y, 0);
+    if (orb.parentTorus) {
+      // Aplicar escala del torus
+      pos.x *= orb.parentTorus.scale.x;
+      pos.y *= orb.parentTorus.scale.y;
+      pos.z *= orb.parentTorus.scale.z;
+      pos.applyEuler(orb.parentTorus.rotation);
+      pos.add(orb.parentTorus.position);
+    } else {
+      pos.applyEuler(new THREE.Euler(orb.tiltX, 0, orb.tiltZ));
+      pos.add(orb.center);
+    }
+    orb.electron.position.copy(pos);
+  });
+  // Pausados: seguir al torus padre (sin avanzar ángulo)
+  pausedOrbitales.forEach(orb => {
+    const x = orb.radius * Math.cos(orb.angle);
+    const y = orb.radius * Math.sin(orb.angle);
+    const pos = new THREE.Vector3(x, y, 0);
+    if (orb.parentTorus) {
+      pos.x *= orb.parentTorus.scale.x;
+      pos.y *= orb.parentTorus.scale.y;
+      pos.z *= orb.parentTorus.scale.z;
+      pos.applyEuler(orb.parentTorus.rotation);
+      pos.add(orb.parentTorus.position);
+    } else {
+      pos.applyEuler(new THREE.Euler(orb.tiltX, 0, orb.tiltZ));
+      pos.add(orb.center);
+    }
+    orb.electron.position.copy(pos);
+  });
+  // Outline sync
+  if (outlineMesh && selectedObject) { outlineMesh.position.copy(selectedObject.position); outlineMesh.rotation.copy(selectedObject.rotation); outlineMesh.scale.copy(selectedObject.scale).multiplyScalar(1.02); }
+  controls.update();
+  renderer.render(scene, camera);
+}
+animate();
+
+window.addEventListener('resize', () => { camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+
+// ===== TOGGLE PANELES =====
+document.getElementById('toggleLeft').addEventListener('click', () => {
+  const lp = document.getElementById('layers-panel');
+  const btn = document.getElementById('toggleLeft');
+  lp.classList.toggle('collapsed');
+  btn.textContent = lp.classList.contains('collapsed') ? '▶' : '◀';
+});
+document.getElementById('toggleRight').addEventListener('click', () => {
+  const rp = document.getElementById('panel');
+  const btn = document.getElementById('toggleRight');
+  rp.classList.toggle('collapsed');
+  btn.textContent = rp.classList.contains('collapsed') ? '◀' : '▶';
+});
+</script>
+</body>
+</html>

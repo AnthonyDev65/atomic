@@ -1,0 +1,6 @@
+{
+  "name": "atomo-editor",
+  "version": "1.0.0",
+  "description": "Editor 3D de modelos atómicos",
+  "private": true
+}

@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Átomo - Neon1</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0a0a0f; overflow: hidden; font-family: 'Segoe UI', sans-serif; }
+  canvas { display: block; cursor: pointer; }
+
+  #info {
+    position: absolute;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: rgba(255,255,255,0.3);
+    font-family: monospace;
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    pointer-events: none;
+  }
+
+  #panel {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    width: 280px;
+    background: rgba(15, 15, 25, 0.95);
+    border: 1px solid rgba(100, 130, 255, 0.3);
+    border-radius: 12px;
+    padding: 16px;
+    color: #ccc;
+    font-size: 13px;
+    backdrop-filter: blur(10px);
+    display: none;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+
+  #panel.visible { display: block; }
+
+  #panel h3 {
+    margin: 0 0 12px 0;
+    color: #88aaff;
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  #panel .obj-name {
+    color: #fff;
+    font-weight: 500;
+    margin-bottom: 12px;
+    padding: 6px 10px;
+    background: rgba(100, 130, 255, 0.1);
+    border-radius: 6px;
+    word-break: break-all;
+  }
+
+  #panel label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+
+  #panel label span {
+    min-width: 80px;
+  }
+
+  #panel input[type="range"] {
+    width: 140px;
+    accent-color: #88aaff;
+  }
+
+  #panel .value {
+    min-width: 40px;
+    text-align: right;
+    color: #88aaff;
+    font-family: monospace;
+    font-size: 12px;
+  }
+
+  #panel .section {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255,255,255,0.1);
+  }
+
+  #panel button {
+    width: 100%;
+    margin-top: 12px;
+    padding: 8px;
+    background: rgba(255, 80, 80, 0.2);
+    border: 1px solid rgba(255, 80, 80, 0.4);
+    color: #ff8888;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+  }
+
+  #panel button:hover {
+    background: rgba(255, 80, 80, 0.3);
+  }
+
+  #panel button.apply {
+    background: rgba(80, 180, 80, 0.2);
+    border: 1px solid rgba(80, 180, 80, 0.4);
+    color: #88ff88;
+  }
+
+  #panel button.apply:hover {
+    background: rgba(80, 180, 80, 0.3);
+  }
+
+  #hint {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    color: rgba(255,255,255,0.5);
+    font-size: 12px;
+    font-family: monospace;
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+<div id="hint">clic en un objeto para seleccionarlo</div>
+<div id="info">arrastra para rotar · scroll para zoom</div>
+
+<div id="panel">
+  <h3>🎛 Animación</h3>
+  <div class="obj-name" id="selectedName">—</div>
+
+  <div class="section">
+    <label>
+      <span>Rotación X</span>
+      <input type="range" id="rotX" min="-3" max="3" step="0.1" value="0">
+      <span class="value" id="rotXVal">0</span>
+    </label>
+    <label>
+      <span>Rotación Y</span>
+      <input type="range" id="rotY" min="-3" max="3" step="0.1" value="0">
+      <span class="value" id="rotYVal">0</span>
+    </label>
+    <label>
+      <span>Rotación Z</span>
+      <input type="range" id="rotZ" min="-3" max="3" step="0.1" value="0">
+      <span class="value" id="rotZVal">0</span>
+    </label>
+  </div>
+
+  <button class="apply" id="btnApply">✓ Aplicar animación</button>
+  <button id="btnStop">✕ Detener animación</button>
+  <button id="btnDeselect">Deseleccionar</button>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.01, 1000);
+camera.position.set(0, 2, 6);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(devicePixelRatio);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.2;
+document.body.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.05;
+
+// Luces
+scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+const dirLight = new THREE.DirectionalLight(0x88aaff, 2);
+dirLight.position.set(5, 8, 5);
+scene.add(dirLight);
+const rimLight = new THREE.DirectionalLight(0x4466ff, 1);
+rimLight.position.set(-5, -2, -5);
+scene.add(rimLight);
+
+// Estado
+const selectableMeshes = [];
+let selectedObject = null;
+let outlineMesh = null;
+
+// Animaciones activas: Map<object.uuid, {x, y, z}>
+const animaciones = new Map();
+
+// Raycaster para selección
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+
+// UI
+const panel = document.getElementById('panel');
+const selectedName = document.getElementById('selectedName');
+const rotX = document.getElementById('rotX');
+const rotY = document.getElementById('rotY');
+const rotZ = document.getElementById('rotZ');
+const rotXVal = document.getElementById('rotXVal');
+const rotYVal = document.getElementById('rotYVal');
+const rotZVal = document.getElementById('rotZVal');
+
+rotX.addEventListener('input', () => rotXVal.textContent = rotX.value);
+rotY.addEventListener('input', () => rotYVal.textContent = rotY.value);
+rotZ.addEventListener('input', () => rotZVal.textContent = rotZ.value);
+
+document.getElementById('btnApply').addEventListener('click', () => {
+  if (!selectedObject) return;
+  const speeds = { x: parseFloat(rotX.value), y: parseFloat(rotY.value), z: parseFloat(rotZ.value) };
+  animaciones.set(selectedObject.uuid, { obj: selectedObject, speeds });
+});
+
+document.getElementById('btnStop').addEventListener('click', () => {
+  if (!selectedObject) return;
+  animaciones.delete(selectedObject.uuid);
+});
+
+document.getElementById('btnDeselect').addEventListener('click', () => {
+  deselect();
+});
+
+// Cargar el GLB
+const loader = new GLTFLoader();
+loader.load(
+  'atomo/Neon1.glb',
+  (gltf) => {
+    scene.add(gltf.scene);
+
+    // Recoger todos los meshes seleccionables
+    gltf.scene.traverse((obj) => {
+      if (obj.isMesh) {
+        selectableMeshes.push(obj);
+      }
+    });
+
+    console.log('Objetos seleccionables:', selectableMeshes.length);
+
+    // Centrar la cámara
+    const box = new THREE.Box3().setFromObject(gltf.scene);
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3()).length();
+    controls.target.copy(center);
+    camera.position.copy(center).add(new THREE.Vector3(0, size * 0.3, size * 1.2));
+    controls.update();
+  },
+  (xhr) => console.log((xhr.loaded / xhr.total * 100).toFixed(0) + '% cargado'),
+  (error) => {
+    console.error('Error cargando GLB:', error);
+    document.getElementById('info').textContent = '⚠ No se encontró Neon1.glb — asegúrate de que esté en la misma carpeta que este HTML';
+    document.getElementById('info').style.color = '#ff6666';
+  }
+);
+
+// Selección por clic
+renderer.domElement.addEventListener('click', (event) => {
+  mouse.x = (event.clientX / innerWidth) * 2 - 1;
+  mouse.y = -(event.clientY / innerHeight) * 2 + 1;
+
+  raycaster.setFromCamera(mouse, camera);
+  const hits = raycaster.intersectObjects(selectableMeshes, false);
+
+  if (hits.length > 0) {
+    selectObject(hits[0].object);
+  }
+});
+
+function selectObject(obj) {
+  // Quitar outline anterior
+  removeOutline();
+
+  selectedObject = obj;
+  selectedName.textContent = obj.name || '(sin nombre)';
+  panel.classList.add('visible');
+
+  // Cargar valores actuales si tiene animación
+  const anim = animaciones.get(obj.uuid);
+  if (anim) {
+    rotX.value = anim.speeds.x; rotXVal.textContent = anim.speeds.x;
+    rotY.value = anim.speeds.y; rotYVal.textContent = anim.speeds.y;
+    rotZ.value = anim.speeds.z; rotZVal.textContent = anim.speeds.z;
+  } else {
+    rotX.value = 0; rotXVal.textContent = '0';
+    rotY.value = 0; rotYVal.textContent = '0';
+    rotZ.value = 0; rotZVal.textContent = '0';
+  }
+
+  // Crear outline (wireframe highlight)
+  const geo = obj.geometry.clone();
+  const mat = new THREE.MeshBasicMaterial({
+    color: 0x88aaff,
+    wireframe: true,
+    transparent: true,
+    opacity: 0.4
+  });
+  outlineMesh = new THREE.Mesh(geo, mat);
+  outlineMesh.position.copy(obj.position);
+  outlineMesh.rotation.copy(obj.rotation);
+  outlineMesh.scale.copy(obj.scale).multiplyScalar(1.02);
+  outlineMesh.raycast = () => {}; // No seleccionable
+  obj.parent.add(outlineMesh);
+}
+
+function removeOutline() {
+  if (outlineMesh) {
+    outlineMesh.removeFromParent();
+    outlineMesh.geometry.dispose();
+    outlineMesh.material.dispose();
+    outlineMesh = null;
+  }
+}
+
+function deselect() {
+  removeOutline();
+  selectedObject = null;
+  panel.classList.remove('visible');
+}
+
+// Animación
+const clock = new THREE.Clock();
+
+function animate() {
+  requestAnimationFrame(animate);
+  const delta = clock.getDelta();
+
+  // Aplicar rotaciones en loop
+  animaciones.forEach(({ obj, speeds }) => {
+    obj.rotation.x += speeds.x * delta;
+    obj.rotation.y += speeds.y * delta;
+    obj.rotation.z += speeds.z * delta;
+  });
+
+  // Sincronizar outline con el objeto seleccionado
+  if (outlineMesh && selectedObject) {
+    outlineMesh.rotation.copy(selectedObject.rotation);
+    outlineMesh.position.copy(selectedObject.position);
+  }
+
+  controls.update();
+  renderer.render(scene, camera);
+}
+
+animate();
+
+// Responsive
+window.addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+// Esc para deseleccionar
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') deselect();
+});
+</script>
+</body>
+</html>
