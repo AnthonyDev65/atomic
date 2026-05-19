@@ -170,7 +170,12 @@
 <div id="move-indicator"><span id="move-text">MOVER</span></div>
 <button class="toggle-btn" id="toggleLeft" title="Mostrar/ocultar panel izquierdo">◀</button>
 <button class="toggle-btn" id="toggleRight" title="Mostrar/ocultar panel derecho">▶</button>
-<button class="toggle-btn" id="toggleScript" title="Consola de scripts (F2)" style="left:50%; transform:translateX(-50%); width:auto; padding:0 12px; font-size:11px;">⚡ Script</button>
+<button class="toggle-btn" id="toggleScript" title="Consola de scripts (F2)" style="left:calc(50% - 60px); transform:translateX(-50%); width:auto; padding:0 12px; font-size:11px;">⚡ Script</button>
+<select id="qualitySelect" title="Calidad gráfica" style="position:absolute; top:16px; left:calc(50% + 40px); transform:translateX(-50%); background:rgba(15,15,25,0.9); border:1px solid rgba(100,130,255,0.3); border-radius:8px; color:#88aaff; font-size:11px; padding:6px 10px; cursor:pointer; z-index:50; backdrop-filter:blur(10px);">
+  <option value="low">🔋 Low</option>
+  <option value="medium" selected>⚡ Medium</option>
+  <option value="high">🔥 High</option>
+</select>
 
 <!-- Script Console -->
 <div id="script-console">
@@ -533,24 +538,19 @@ document.querySelectorAll('.add-btn').forEach(btn => {
 });
 
 function addPrimitive(shape, color, options = {}) {
-  // Límite de objetos para evitar crash del navegador
-  const MAX_OBJECTS = 500;
-  if (layers.length >= MAX_OBJECTS && !options._forceCreate) {
-    if (!options._batch) alert(`Límite de ${MAX_OBJECTS} objetos alcanzado. El navegador no soporta más sin crashear.`);
-    return null;
-  }
   let geometry, name;
   const tubeT = options.tubeThickness || 0.1;
   const sphereR = options.sphereRadius || 0.5;
   const torusR = options.torusRadius || 0.5;
-  // Usar menos segmentos si hay muchos objetos (performance)
-  const hiPoly = layers.length < 100;
-  const sSeg = hiPoly ? 24 : 8;
-  const tSeg = hiPoly ? 48 : 24;
+  // Calidad gráfica según selector
+  const quality = document.getElementById('qualitySelect').value;
+  const sSeg = quality === 'high' ? 32 : quality === 'medium' ? 16 : 8;
+  const tSeg = quality === 'high' ? 64 : quality === 'medium' ? 32 : 16;
+  const tRad = quality === 'high' ? 16 : quality === 'medium' ? 8 : 6;
   switch (shape) {
     case 'sphere': geometry = new THREE.SphereGeometry(sphereR, sSeg, sSeg); name = 'Esfera'; break;
     case 'box': geometry = new THREE.BoxGeometry(0.8, 0.8, 0.8); name = 'Cubo'; break;
-    case 'torus': geometry = new THREE.TorusGeometry(torusR, tubeT, hiPoly?16:8, tSeg); name = 'Torus'; break;
+    case 'torus': geometry = new THREE.TorusGeometry(torusR, tubeT, tRad, tSeg); name = 'Torus'; break;
     case 'cylinder': geometry = new THREE.CylinderGeometry(0.4, 0.4, 1, sSeg); name = 'Cilindro'; break;
     case 'cone': geometry = new THREE.ConeGeometry(0.5, 1, sSeg); name = 'Cono'; break;
     case 'icosahedron': geometry = new THREE.IcosahedronGeometry(sphereR); name = 'Icosaedro'; break;
@@ -1200,6 +1200,14 @@ document.getElementById('toggleScript').addEventListener('click', () => {
   if (scriptConsole.classList.contains('visible')) scriptInput.focus();
 });
 
+// Calidad gráfica: ajustar pixelRatio
+document.getElementById('qualitySelect').addEventListener('change', (e) => {
+  const q = e.target.value;
+  if (q === 'low') renderer.setPixelRatio(1);
+  else if (q === 'medium') renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+  else renderer.setPixelRatio(devicePixelRatio);
+});
+
 // Ctrl+Enter para ejecutar
 scriptInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); runScript(); }
@@ -1267,8 +1275,7 @@ function runScript() {
   try {
     const fn = new Function(...Object.keys(scriptFunctions), code);
     fn(...Object.values(scriptFunctions));
-    scriptLog(`✓ Script ejecutado (${layers.length}/500 objetos en escena)`);
-    if (layers.length >= 400) scriptLog('⚠ Cerca del límite. Más objetos pueden crashear el navegador.', 'err');
+    scriptLog(`✓ Script ejecutado (${layers.length} objetos en escena)`);
   } catch (err) {
     scriptLog('✗ Error: ' + err.message, 'err');
   }
