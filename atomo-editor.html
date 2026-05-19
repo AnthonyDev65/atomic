@@ -170,6 +170,7 @@
 <div id="move-indicator"><span id="move-text">MOVER</span></div>
 <button class="toggle-btn" id="toggleLeft" title="Mostrar/ocultar panel izquierdo">◀</button>
 <button class="toggle-btn" id="toggleRight" title="Mostrar/ocultar panel derecho">▶</button>
+<button class="toggle-btn" id="toggleScript" title="Consola de scripts (F2)" style="left:50%; transform:translateX(-50%); width:auto; padding:0 12px; font-size:11px;">⚡ Script</button>
 
 <!-- Script Console -->
 <div id="script-console">
@@ -1174,6 +1175,10 @@ window.addEventListener('keydown', (e) => {
 });
 document.getElementById('btnCloseScript').addEventListener('click', () => scriptConsole.classList.remove('visible'));
 document.getElementById('btnRunScript').addEventListener('click', runScript);
+document.getElementById('toggleScript').addEventListener('click', () => {
+  scriptConsole.classList.toggle('visible');
+  if (scriptConsole.classList.contains('visible')) scriptInput.focus();
+});
 
 // Ctrl+Enter para ejecutar
 scriptInput.addEventListener('keydown', (e) => {
