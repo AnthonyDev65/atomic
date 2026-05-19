@@ -533,14 +533,20 @@ document.querySelectorAll('.add-btn').forEach(btn => {
 });
 
 function addPrimitive(shape, color, options = {}) {
+  // Límite de objetos para evitar crash del navegador
+  const MAX_OBJECTS = 500;
+  if (layers.length >= MAX_OBJECTS && !options._forceCreate) {
+    if (!options._batch) alert(`Límite de ${MAX_OBJECTS} objetos alcanzado. El navegador no soporta más sin crashear.`);
+    return null;
+  }
   let geometry, name;
   const tubeT = options.tubeThickness || 0.1;
   const sphereR = options.sphereRadius || 0.5;
   const torusR = options.torusRadius || 0.5;
   // Usar menos segmentos si hay muchos objetos (performance)
-  const hiPoly = layers.length < 200;
-  const sSeg = hiPoly ? 32 : 12;
-  const tSeg = hiPoly ? 64 : 32;
+  const hiPoly = layers.length < 100;
+  const sSeg = hiPoly ? 24 : 8;
+  const tSeg = hiPoly ? 48 : 24;
   switch (shape) {
     case 'sphere': geometry = new THREE.SphereGeometry(sphereR, sSeg, sSeg); name = 'Esfera'; break;
     case 'box': geometry = new THREE.BoxGeometry(0.8, 0.8, 0.8); name = 'Cubo'; break;
@@ -1261,7 +1267,8 @@ function runScript() {
   try {
     const fn = new Function(...Object.keys(scriptFunctions), code);
     fn(...Object.values(scriptFunctions));
-    scriptLog(`✓ Script ejecutado (${layers.length} objetos en escena)`);
+    scriptLog(`✓ Script ejecutado (${layers.length}/500 objetos en escena)`);
+    if (layers.length >= 400) scriptLog('⚠ Cerca del límite. Más objetos pueden crashear el navegador.', 'err');
   } catch (err) {
     scriptLog('✗ Error: ' + err.message, 'err');
   }
