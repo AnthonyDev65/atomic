@@ -130,6 +130,39 @@
     width: 70px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.2);
     color: #fff; border-radius: 4px; padding: 4px 6px; font-size: 12px; text-align: center;
   }
+  /* ===== SCRIPT CONSOLE ===== */
+  #script-console {
+    position: absolute; bottom: 50px; left: 50%; transform: translateX(-50%);
+    width: 600px; max-width: 90vw;
+    background: rgba(10, 10, 20, 0.95); border: 1px solid rgba(100, 130, 255, 0.4);
+    border-radius: 12px; padding: 12px; backdrop-filter: blur(10px);
+    display: none; z-index: 200;
+  }
+  #script-console.visible { display: block; }
+  #script-console h4 { color: #ffaa44; font-size: 12px; margin-bottom: 8px; font-weight: 600; }
+  #script-console textarea {
+    width: 100%; height: 120px; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.15);
+    color: #88ff88; font-family: 'Consolas', 'Courier New', monospace; font-size: 12px;
+    border-radius: 6px; padding: 8px; resize: vertical; outline: none;
+  }
+  #script-console textarea:focus { border-color: rgba(100, 130, 255, 0.5); }
+  #script-console .console-btns { display: flex; gap: 8px; margin-top: 8px; }
+  #script-console .console-btns button {
+    padding: 6px 14px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.2);
+    cursor: pointer; font-size: 11px; transition: all 0.15s;
+  }
+  #script-console .run-btn { background: rgba(80, 180, 80, 0.2); border-color: rgba(80, 180, 80, 0.4); color: #88ff88; }
+  #script-console .run-btn:hover { background: rgba(80, 180, 80, 0.3); }
+  #script-console .close-btn { background: rgba(255, 80, 80, 0.2); border-color: rgba(255, 80, 80, 0.4); color: #ff8888; }
+  #script-console .close-btn:hover { background: rgba(255, 80, 80, 0.3); }
+  #script-console .help-text { color: rgba(255,255,255,0.4); font-size: 10px; margin-top: 8px; font-family: monospace; line-height: 1.6; }
+  #script-output {
+    max-height: 60px; overflow-y: auto; margin-top: 6px; padding: 4px 8px;
+    background: rgba(0,0,0,0.3); border-radius: 4px; font-family: monospace;
+    font-size: 11px; color: #aaa;
+  }
+  #script-output .err { color: #ff6666; }
+  #script-output .ok { color: #88ff88; }
 </style>
 </head>
 <body>
@@ -137,6 +170,28 @@
 <div id="move-indicator"><span id="move-text">MOVER</span></div>
 <button class="toggle-btn" id="toggleLeft" title="Mostrar/ocultar panel izquierdo">◀</button>
 <button class="toggle-btn" id="toggleRight" title="Mostrar/ocultar panel derecho">▶</button>
+
+<!-- Script Console -->
+<div id="script-console">
+  <h4>⚡ Consola de Scripts (F2 para abrir/cerrar)</h4>
+  <textarea id="scriptInput" placeholder="// Comandos disponibles:
+// esfera(x, y, z, color, tamaño, etiqueta)
+// orbital(electrones, radio, velocidad, colorNucleo, colorElectron, colorOrbita)
+// torus(x, y, z, color, radio, grosor, rotX, rotY, rotZ)
+// limpiar()
+
+esfera(0, 0, 0, '#ff0000', 0.3, 'P')
+esfera(0.2, 0.1, 0, '#0044ff', 0.3, 'N')
+orbital(3, 1.5, 2, '#ff4444', '#44aaff', '#4466ff')"></textarea>
+  <div id="script-output"></div>
+  <div class="console-btns">
+    <button class="run-btn" id="btnRunScript">▶ Ejecutar</button>
+    <button class="close-btn" id="btnCloseScript">✕ Cerrar</button>
+  </div>
+  <div class="help-text">
+    esfera(x,y,z, color, tamaño, etiqueta?) · orbital(electrones, radio, vel, colNucleo, colElectron, colOrbita) · torus(x,y,z, color, radio, grosor, rotX°, rotY°, rotZ°) · limpiar()
+  </div>
+</div>
 
 <!-- Panel izquierdo -->
 <div id="layers-panel">
@@ -1103,6 +1158,118 @@ document.getElementById('toggleRight').addEventListener('click', () => {
   rp.classList.toggle('collapsed');
   btn.textContent = rp.classList.contains('collapsed') ? '◀' : '▶';
 });
+
+// ===== CONSOLA DE SCRIPTS =====
+const scriptConsole = document.getElementById('script-console');
+const scriptInput = document.getElementById('scriptInput');
+const scriptOutput = document.getElementById('script-output');
+
+// F2 para abrir/cerrar
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'F2') {
+    e.preventDefault();
+    scriptConsole.classList.toggle('visible');
+    if (scriptConsole.classList.contains('visible')) scriptInput.focus();
+  }
+});
+document.getElementById('btnCloseScript').addEventListener('click', () => scriptConsole.classList.remove('visible'));
+document.getElementById('btnRunScript').addEventListener('click', runScript);
+
+// Ctrl+Enter para ejecutar
+scriptInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); runScript(); }
+});
+
+function scriptLog(msg, type = 'ok') {
+  const div = document.createElement('div');
+  div.className = type;
+  div.textContent = msg;
+  scriptOutput.appendChild(div);
+  scriptOutput.scrollTop = scriptOutput.scrollHeight;
+}
+
+function runScript() {
+  scriptOutput.innerHTML = '';
+  const code = scriptInput.value.trim();
+  if (!code) return;
+
+  // Definir funciones disponibles en el script
+  const scriptFunctions = {
+    esfera: (x=0, y=0, z=0, color='#ff4444', size=0.5, label='') => {
+      const mesh = addPrimitive('sphere', color, {
+        position: {x, y, z},
+        sphereRadius: size,
+        label: label,
+        importName: label || undefined
+      });
+      scriptLog(`✓ esfera en (${x},${y},${z}) color=${color} r=${size}${label ? ' "'+label+'"' : ''}`);
+      return mesh;
+    },
+
+    orbital: (electrones=3, radio=1.5, velocidad=2, colorNucleo='#ff4444', colorElectron='#44aaff', colorOrbita='#4466ff', nucleoSize=0.4, electronSize=0.15) => {
+      // Simular clic en crear orbital con los parámetros dados
+      document.getElementById('orbElectrons').value = electrones;
+      document.getElementById('orbRadius').value = radio;
+      document.getElementById('orbSpeed').value = velocidad;
+      document.getElementById('orbNucleusColor').value = colorNucleo;
+      document.getElementById('orbElectronColor').value = colorElectron;
+      document.getElementById('orbPathColor').value = colorOrbita;
+      document.getElementById('orbNucleusSize').value = nucleoSize;
+      document.getElementById('orbElectronSize').value = electronSize;
+      document.getElementById('btnCreateOrbital').click();
+      scriptLog(`✓ orbital: ${electrones} electrones, radio=${radio}, vel=${velocidad}`);
+    },
+
+    torus: (x=0, y=0, z=0, color='#4466ff', radio=1, grosor=0.05, rotXdeg=0, rotYdeg=0, rotZdeg=0) => {
+      const mesh = addPrimitive('torus', color, {
+        position: {x, y, z},
+        torusRadius: radio,
+        tubeThickness: grosor,
+        rotation: {x: rotXdeg * DEG, y: rotYdeg * DEG, z: rotZdeg * DEG},
+        label: ''
+      });
+      scriptLog(`✓ torus en (${x},${y},${z}) radio=${radio} grosor=${grosor}`);
+      return mesh;
+    },
+
+    cubo: (x=0, y=0, z=0, color='#ffffff', scale=1) => {
+      const mesh = addPrimitive('box', color, {
+        position: {x, y, z},
+        scale: {x: scale, y: scale, z: scale},
+        label: ''
+      });
+      scriptLog(`✓ cubo en (${x},${y},${z}) escala=${scale}`);
+      return mesh;
+    },
+
+    cilindro: (x=0, y=0, z=0, color='#ffffff', scale=1) => {
+      const mesh = addPrimitive('cylinder', color, {
+        position: {x, y, z},
+        scale: {x: scale, y: scale, z: scale},
+        label: ''
+      });
+      scriptLog(`✓ cilindro en (${x},${y},${z})`);
+      return mesh;
+    },
+
+    limpiar: () => {
+      clearScene();
+      scriptLog('✓ escena limpiada');
+    },
+
+    repetir: (n, fn) => {
+      for (let i = 0; i < n; i++) fn(i);
+      scriptLog(`✓ repetido ${n} veces`);
+    }
+  };
+
+  try {
+    const fn = new Function(...Object.keys(scriptFunctions), code);
+    fn(...Object.values(scriptFunctions));
+  } catch (err) {
+    scriptLog('✗ Error: ' + err.message, 'err');
+  }
+}
 </script>
 </body>
 </html>
