@@ -537,15 +537,19 @@ function addPrimitive(shape, color, options = {}) {
   const tubeT = options.tubeThickness || 0.1;
   const sphereR = options.sphereRadius || 0.5;
   const torusR = options.torusRadius || 0.5;
+  // Usar menos segmentos si hay muchos objetos (performance)
+  const hiPoly = layers.length < 200;
+  const sSeg = hiPoly ? 32 : 12;
+  const tSeg = hiPoly ? 64 : 32;
   switch (shape) {
-    case 'sphere': geometry = new THREE.SphereGeometry(sphereR, 32, 32); name = 'Esfera'; break;
+    case 'sphere': geometry = new THREE.SphereGeometry(sphereR, sSeg, sSeg); name = 'Esfera'; break;
     case 'box': geometry = new THREE.BoxGeometry(0.8, 0.8, 0.8); name = 'Cubo'; break;
-    case 'torus': geometry = new THREE.TorusGeometry(torusR, tubeT, 16, 64); name = 'Torus'; break;
-    case 'cylinder': geometry = new THREE.CylinderGeometry(0.4, 0.4, 1, 32); name = 'Cilindro'; break;
-    case 'cone': geometry = new THREE.ConeGeometry(0.5, 1, 32); name = 'Cono'; break;
+    case 'torus': geometry = new THREE.TorusGeometry(torusR, tubeT, hiPoly?16:8, tSeg); name = 'Torus'; break;
+    case 'cylinder': geometry = new THREE.CylinderGeometry(0.4, 0.4, 1, sSeg); name = 'Cilindro'; break;
+    case 'cone': geometry = new THREE.ConeGeometry(0.5, 1, sSeg); name = 'Cono'; break;
     case 'icosahedron': geometry = new THREE.IcosahedronGeometry(sphereR); name = 'Icosaedro'; break;
     case 'plane': geometry = new THREE.PlaneGeometry(1, 1); name = 'Plano'; break;
-    default: geometry = new THREE.SphereGeometry(sphereR, 32, 32); name = 'Objeto';
+    default: geometry = new THREE.SphereGeometry(sphereR, sSeg, sSeg); name = 'Objeto';
   }
   const material = new THREE.MeshStandardMaterial({ color: new THREE.Color(color), roughness: 0.4, metalness: 0.3 });
   const mesh = new THREE.Mesh(geometry, material);
@@ -565,22 +569,31 @@ function addPrimitive(shape, color, options = {}) {
   if ((shape === 'sphere' || shape === 'icosahedron') && label && label.length > 0) {
     applyLabel(mesh, label, options.labelColor || '#ffffff');
   }
-  renderLayers();
+  if (!options._batch) renderLayers();
   return mesh;
 }
 
 // ===== CAPAS =====
 function renderLayers() {
   layersList.innerHTML = '';
-  layers.forEach(layer => {
+  const MAX_VISIBLE = 50;
+  const icons = { sphere:'⚪', box:'⬜', torus:'⭕', cylinder:'🔷', cone:'🔺', icosahedron:'🔶', plane:'📄' };
+  const count = layers.length;
+  const showLayers = count > MAX_VISIBLE ? layers.slice(0, MAX_VISIBLE) : layers;
+  showLayers.forEach(layer => {
     const div = document.createElement('div');
     div.className = 'layer-item' + (selectedObject && selectedObject.uuid === layer.id ? ' selected' : '');
-    const icons = { sphere:'⚪', box:'⬜', torus:'⭕', cylinder:'🔷', cone:'🔺', icosahedron:'🔶', plane:'📄' };
     div.innerHTML = `<span class="icon">${icons[layer.type]||'📦'}</span><span class="name">${layer.name}</span><span class="visibility ${layer.visible?'':'hidden'}">${layer.visible?'👁':'👁‍🗨'}</span>`;
     div.querySelector('.name').addEventListener('click', () => selectObject(layer.obj));
     div.querySelector('.visibility').addEventListener('click', (e) => { e.stopPropagation(); layer.visible = !layer.visible; layer.obj.visible = layer.visible; renderLayers(); });
     layersList.appendChild(div);
   });
+  if (count > MAX_VISIBLE) {
+    const info = document.createElement('div');
+    info.style.cssText = 'color:#aaa; font-size:10px; text-align:center; padding:8px; border-top:1px solid rgba(255,255,255,0.1); margin-top:8px;';
+    info.textContent = `... y ${count - MAX_VISIBLE} objetos más (${count} total)`;
+    layersList.appendChild(info);
+  }
 }
 
 // ===== SELECCIÓN =====
@@ -1017,7 +1030,8 @@ function importProject(data) {
       tubeThickness: od.tubeThickness || 0.1,
       torusRadius: od.torusRadius || 0.5,
       sphereRadius: od.sphereRadius || 0.5,
-      importName: od.name
+      importName: od.name,
+      _batch: true
     });
     importedMeshes.push(mesh);
     if (!mesh) return;
@@ -1198,21 +1212,16 @@ function runScript() {
   const code = scriptInput.value.trim();
   if (!code) return;
 
-  // Definir funciones disponibles en el script
+  // Definir funciones disponibles en el script (batch mode: no renderLayers en cada una)
   const scriptFunctions = {
     esfera: (x=0, y=0, z=0, color='#ff4444', size=0.5, label='') => {
-      const mesh = addPrimitive('sphere', color, {
-        position: {x, y, z},
-        sphereRadius: size,
-        label: label,
-        importName: label || undefined
+      return addPrimitive('sphere', color, {
+        position: {x, y, z}, sphereRadius: size, label: label,
+        importName: label || undefined, _batch: true
       });
-      scriptLog(`✓ esfera en (${x},${y},${z}) color=${color} r=${size}${label ? ' "'+label+'"' : ''}`);
-      return mesh;
     },
 
     orbital: (electrones=3, radio=1.5, velocidad=2, colorNucleo='#ff4444', colorElectron='#44aaff', colorOrbita='#4466ff', nucleoSize=0.4, electronSize=0.15) => {
-      // Simular clic en crear orbital con los parámetros dados
       document.getElementById('orbElectrons').value = electrones;
       document.getElementById('orbRadius').value = radio;
       document.getElementById('orbSpeed').value = velocidad;
@@ -1222,58 +1231,42 @@ function runScript() {
       document.getElementById('orbNucleusSize').value = nucleoSize;
       document.getElementById('orbElectronSize').value = electronSize;
       document.getElementById('btnCreateOrbital').click();
-      scriptLog(`✓ orbital: ${electrones} electrones, radio=${radio}, vel=${velocidad}`);
     },
 
     torus: (x=0, y=0, z=0, color='#4466ff', radio=1, grosor=0.05, rotXdeg=0, rotYdeg=0, rotZdeg=0) => {
-      const mesh = addPrimitive('torus', color, {
-        position: {x, y, z},
-        torusRadius: radio,
-        tubeThickness: grosor,
+      return addPrimitive('torus', color, {
+        position: {x, y, z}, torusRadius: radio, tubeThickness: grosor,
         rotation: {x: rotXdeg * DEG, y: rotYdeg * DEG, z: rotZdeg * DEG},
-        label: ''
+        label: '', _batch: true
       });
-      scriptLog(`✓ torus en (${x},${y},${z}) radio=${radio} grosor=${grosor}`);
-      return mesh;
     },
 
     cubo: (x=0, y=0, z=0, color='#ffffff', scale=1) => {
-      const mesh = addPrimitive('box', color, {
-        position: {x, y, z},
-        scale: {x: scale, y: scale, z: scale},
-        label: ''
+      return addPrimitive('box', color, {
+        position: {x, y, z}, scale: {x: scale, y: scale, z: scale}, label: '', _batch: true
       });
-      scriptLog(`✓ cubo en (${x},${y},${z}) escala=${scale}`);
-      return mesh;
     },
 
     cilindro: (x=0, y=0, z=0, color='#ffffff', scale=1) => {
-      const mesh = addPrimitive('cylinder', color, {
-        position: {x, y, z},
-        scale: {x: scale, y: scale, z: scale},
-        label: ''
+      return addPrimitive('cylinder', color, {
+        position: {x, y, z}, scale: {x: scale, y: scale, z: scale}, label: '', _batch: true
       });
-      scriptLog(`✓ cilindro en (${x},${y},${z})`);
-      return mesh;
     },
 
-    limpiar: () => {
-      clearScene();
-      scriptLog('✓ escena limpiada');
-    },
+    limpiar: () => { clearScene(); },
 
-    repetir: (n, fn) => {
-      for (let i = 0; i < n; i++) fn(i);
-      scriptLog(`✓ repetido ${n} veces`);
-    }
+    repetir: (n, fn) => { for (let i = 0; i < n; i++) fn(i); }
   };
 
   try {
     const fn = new Function(...Object.keys(scriptFunctions), code);
     fn(...Object.values(scriptFunctions));
+    scriptLog(`✓ Script ejecutado (${layers.length} objetos en escena)`);
   } catch (err) {
     scriptLog('✗ Error: ' + err.message, 'err');
   }
+  // Un solo renderLayers al final
+  renderLayers();
 }
 </script>
 </body>
