@@ -544,9 +544,9 @@ function addPrimitive(shape, color, options = {}) {
   const torusR = options.torusRadius || 0.5;
   // Calidad gráfica según selector
   const quality = document.getElementById('qualitySelect').value;
-  const sSeg = quality === 'high' ? 32 : quality === 'medium' ? 16 : 8;
-  const tSeg = quality === 'high' ? 64 : quality === 'medium' ? 32 : 16;
-  const tRad = quality === 'high' ? 16 : quality === 'medium' ? 8 : 6;
+  const sSeg = quality === 'high' ? 64 : quality === 'medium' ? 24 : 8;
+  const tSeg = quality === 'high' ? 128 : quality === 'medium' ? 48 : 16;
+  const tRad = quality === 'high' ? 32 : quality === 'medium' ? 12 : 6;
   switch (shape) {
     case 'sphere': geometry = new THREE.SphereGeometry(sphereR, sSeg, sSeg); name = 'Esfera'; break;
     case 'box': geometry = new THREE.BoxGeometry(0.8, 0.8, 0.8); name = 'Cubo'; break;
