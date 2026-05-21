@@ -271,6 +271,7 @@ orbital(3, 1.5, 2, '#ff4444', '#44aaff', '#4466ff')"></textarea>
       <input type="color" id="objColor" value="#ffffff" style="width:50px; height:28px; border:none; cursor:pointer; background:transparent;">
     </label>
     <button class="apply" id="btnColor">✓ Aplicar color</button>
+    <label style="margin-top:8px;"><span>Opacidad</span><input type="range" id="objOpacity" min="0.05" max="1" step="0.05" value="1" style="width:100px;"><span class="value" id="opacityVal">1</span></label>
   </div>
 
   <div class="section">
@@ -489,6 +490,18 @@ document.getElementById('btnColor').addEventListener('click', () => {
   }
 });
 
+// ===== OPACIDAD =====
+const objOpacity = document.getElementById('objOpacity');
+const opacityVal = document.getElementById('opacityVal');
+objOpacity.addEventListener('input', () => {
+  opacityVal.textContent = objOpacity.value;
+  if (!selectedObject) return;
+  const val = parseFloat(objOpacity.value);
+  selectedObject.material.transparent = val < 1;
+  selectedObject.material.opacity = val;
+  selectedObject.material.needsUpdate = true;
+});
+
 // ===== ETIQUETAS =====
 document.getElementById('btnLabel').addEventListener('click', () => {
   if (!selectedObject) return;
@@ -623,6 +636,10 @@ function selectObject(obj) {
   // Color actual
   const layer = layers.find(l => l.id === obj.uuid);
   objColorInput.value = layer && layer.color ? layer.color : '#' + (obj.material.color ? obj.material.color.getHexString() : 'ffffff');
+
+  // Opacidad actual
+  document.getElementById('objOpacity').value = obj.material.opacity || 1;
+  document.getElementById('opacityVal').textContent = (obj.material.opacity || 1).toFixed(2);
 
   // Etiqueta
   if (isSphere(obj)) { labelSection.style.display = 'block'; const ld = etiquetas.get(obj.uuid); labelText.value = ld ? ld.text : ''; }
