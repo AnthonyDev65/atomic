@@ -1070,9 +1070,23 @@ document.getElementById('btnCreateParticles').addEventListener('click', () => {
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
 
+  // Crear textura circular para que se vean como puntos de luz
+  const ptcCanvas = document.createElement('canvas');
+  ptcCanvas.width = 64; ptcCanvas.height = 64;
+  const ptcCtx = ptcCanvas.getContext('2d');
+  const gradient = ptcCtx.createRadialGradient(32, 32, 0, 32, 32, 32);
+  gradient.addColorStop(0, 'rgba(255,255,255,1)');
+  gradient.addColorStop(0.3, 'rgba(255,255,255,0.8)');
+  gradient.addColorStop(0.7, 'rgba(255,255,255,0.2)');
+  gradient.addColorStop(1, 'rgba(255,255,255,0)');
+  ptcCtx.fillStyle = gradient;
+  ptcCtx.fillRect(0, 0, 64, 64);
+  const ptcTexture = new THREE.CanvasTexture(ptcCanvas);
+
   const material = new THREE.PointsMaterial({
     color: new THREE.Color(color),
     size,
+    map: ptcTexture,
     transparent: true,
     opacity: 0.9,
     blending: THREE.AdditiveBlending,
