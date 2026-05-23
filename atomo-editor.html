@@ -177,10 +177,42 @@
   <option value="high">🔥 High</option>
 </select>
 <button class="toggle-btn" id="toggleConfig" title="Configuración gráfica" style="left:calc(50% + 100px); transform:translateX(-50%); width:auto; padding:0 12px; font-size:11px;">⚙️</button>
+<button class="toggle-btn" id="toggleViewer" title="Modo Visualizador (V)" style="left:calc(50% + 160px); transform:translateX(-50%); width:auto; padding:0 12px; font-size:11px;">👁 Ver</button>
 
 <!-- Config Panel -->
 <div id="config-panel" style="position:absolute; top:55px; left:50%; transform:translateX(-50%); width:320px; background:rgba(10,10,20,0.95); border:1px solid rgba(100,130,255,0.4); border-radius:12px; padding:16px; color:#ccc; font-size:12px; backdrop-filter:blur(10px); display:none; z-index:200;">
   <h4 style="color:#ffaa44; margin-bottom:12px; font-size:13px;">⚙️ Configuración Gráfica</h4>
+
+<!-- Viewer Mode Setup (se muestra antes de entrar al modo) -->
+<div id="viewer-setup" style="position:absolute; top:55px; left:50%; transform:translateX(-50%); width:360px; background:rgba(10,10,20,0.95); border:1px solid rgba(100,200,100,0.4); border-radius:12px; padding:16px; color:#ccc; font-size:12px; backdrop-filter:blur(10px); display:none; z-index:200;">
+  <h4 style="color:#88ff88; margin-bottom:12px; font-size:13px;">👁 Configurar Modo Visualizador</h4>
+  <label style="display:block; margin-bottom:8px;"><span style="font-size:11px; color:#aaa;">Símbolo del elemento:</span>
+    <input type="text" id="viewerSymbol" value="Ne" maxlength="3" style="width:100%; margin-top:4px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.2); color:#fff; border-radius:4px; padding:6px 8px; font-size:18px; text-align:center; font-weight:bold;">
+  </label>
+  <label style="display:block; margin-bottom:8px;"><span style="font-size:11px; color:#aaa;">Nombre del elemento:</span>
+    <input type="text" id="viewerName" value="Neón" style="width:100%; margin-top:4px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.2); color:#fff; border-radius:4px; padding:6px 8px; font-size:13px;">
+  </label>
+  <label style="display:block; margin-bottom:8px;"><span style="font-size:11px; color:#aaa;">Número atómico (Z):</span>
+    <input type="text" id="viewerZ" value="10" style="width:100%; margin-top:4px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.2); color:#fff; border-radius:4px; padding:6px 8px; font-size:13px;">
+  </label>
+  <label style="display:block; margin-bottom:8px;"><span style="font-size:11px; color:#aaa;">Masa atómica:</span>
+    <input type="text" id="viewerMass" value="20.18" style="width:100%; margin-top:4px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.2); color:#fff; border-radius:4px; padding:6px 8px; font-size:13px;">
+  </label>
+  <label style="display:block; margin-bottom:8px;"><span style="font-size:11px; color:#aaa;">Configuración electrónica (usar ^ para superíndice, ej: 1s^2 2s^2 2p^6):</span>
+    <input type="text" id="viewerConfig" value="1s^2 2s^2 2p^6" style="width:100%; margin-top:4px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.2); color:#fff; border-radius:4px; padding:6px 8px; font-size:13px; font-family:monospace;">
+  </label>
+  <label style="display:block; margin-bottom:8px;"><span style="font-size:11px; color:#aaa;">Info extra (opcional):</span>
+    <input type="text" id="viewerExtra" value="Gas noble · Grupo 18" style="width:100%; margin-top:4px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.2); color:#fff; border-radius:4px; padding:6px 8px; font-size:13px;">
+  </label>
+  <button id="btnEnterViewer" style="width:100%; margin-top:10px; padding:10px; background:rgba(80,180,80,0.2); border:1px solid rgba(80,180,80,0.4); color:#88ff88; border-radius:6px; cursor:pointer; font-size:13px; font-weight:600;">▶ Entrar al Modo Visualizador</button>
+  <button onclick="document.getElementById('viewer-setup').style.display='none'" style="width:100%; margin-top:6px; padding:6px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.2); color:#ccc; border-radius:6px; cursor:pointer; font-size:11px;">Cancelar</button>
+</div>
+
+<!-- Viewer Mode HUD -->
+<div id="viewer-hud" style="position:absolute; top:24px; left:24px; display:none; z-index:150; pointer-events:none;">
+  <div id="viewer-hud-content" style="color:#fff; font-family:'Segoe UI',sans-serif;"></div>
+</div>
+<button id="exitViewer" style="position:absolute; bottom:24px; right:24px; padding:10px 20px; background:rgba(255,80,80,0.3); border:1px solid rgba(255,80,80,0.5); color:#ff8888; border-radius:8px; cursor:pointer; font-size:12px; display:none; z-index:150;">✕ Salir del Visualizador</button>
   <label style="display:flex; justify-content:space-between; margin-bottom:8px;"><span>Bloom Intensidad</span><input type="range" id="cfgBloomStrength" min="0" max="3" step="0.1" value="1.2" style="width:100px; accent-color:#88aaff;"><span id="cfgBloomStrengthVal" style="min-width:30px; text-align:right; color:#88aaff; font-family:monospace;">1.2</span></label>
   <label style="display:flex; justify-content:space-between; margin-bottom:8px;"><span>Bloom Radio</span><input type="range" id="cfgBloomRadius" min="0" max="2" step="0.1" value="0.4" style="width:100px; accent-color:#88aaff;"><span id="cfgBloomRadiusVal" style="min-width:30px; text-align:right; color:#88aaff; font-family:monospace;">0.4</span></label>
   <label style="display:flex; justify-content:space-between; margin-bottom:8px;"><span>Bloom Threshold</span><input type="range" id="cfgBloomThreshold" min="0" max="1" step="0.05" value="0.1" style="width:100px; accent-color:#88aaff;"><span id="cfgBloomThresholdVal" style="min-width:30px; text-align:right; color:#88aaff; font-family:monospace;">0.1</span></label>
@@ -1416,6 +1448,81 @@ document.getElementById('cfgExposure').addEventListener('input', (e) => {
 });
 document.getElementById('cfgAxes').addEventListener('change', (e) => {
   axisHelper.visible = e.target.checked;
+});
+
+// ===== MODO VISUALIZADOR =====
+let viewerMode = false;
+
+document.getElementById('toggleViewer').addEventListener('click', () => {
+  document.getElementById('viewer-setup').style.display = 'block';
+});
+
+document.getElementById('btnEnterViewer').addEventListener('click', () => {
+  document.getElementById('viewer-setup').style.display = 'none';
+  enterViewerMode();
+});
+
+document.getElementById('exitViewer').addEventListener('click', exitViewerMode);
+
+function formatElectronConfig(text) {
+  // Convierte "1s^2 2s^2 2p^6" en HTML con superíndices
+  return text.replace(/\^(\d+)/g, '<sup>$1</sup>');
+}
+
+function enterViewerMode() {
+  viewerMode = true;
+  // Ocultar todo UI del editor
+  document.getElementById('layers-panel').style.display = 'none';
+  document.getElementById('panel').style.display = 'none';
+  document.getElementById('panel').classList.remove('visible');
+  document.getElementById('info').style.display = 'none';
+  document.getElementById('script-console').classList.remove('visible');
+  document.getElementById('config-panel').style.display = 'none';
+  document.querySelectorAll('.toggle-btn').forEach(b => b.style.display = 'none');
+  document.getElementById('qualitySelect').style.display = 'none';
+  axisHelper.visible = false;
+  // Deseleccionar
+  deselect();
+
+  // Mostrar HUD
+  const symbol = document.getElementById('viewerSymbol').value || 'X';
+  const name = document.getElementById('viewerName').value || '';
+  const z = document.getElementById('viewerZ').value || '';
+  const mass = document.getElementById('viewerMass').value || '';
+  const config = document.getElementById('viewerConfig').value || '';
+  const extra = document.getElementById('viewerExtra').value || '';
+
+  let html = `<div style="margin-bottom:6px; opacity:0.5; font-size:11px; letter-spacing:0.1em;">MODELO ATÓMICO</div>`;
+  html += `<div style="font-size:64px; font-weight:700; line-height:1; margin-bottom:4px; text-shadow:0 0 20px rgba(255,255,255,0.3);">${symbol}</div>`;
+  html += `<div style="font-size:18px; font-weight:300; opacity:0.8; margin-bottom:12px;">${name}</div>`;
+  if (z) html += `<div style="font-size:13px; opacity:0.6; margin-bottom:4px;">Z = ${z}</div>`;
+  if (mass) html += `<div style="font-size:13px; opacity:0.6; margin-bottom:12px;">Masa: ${mass} u</div>`;
+  if (config) html += `<div style="font-size:15px; font-family:'Consolas',monospace; margin-bottom:8px; color:#aaddff; text-shadow:0 0 8px rgba(100,180,255,0.4);">${formatElectronConfig(config)}</div>`;
+  if (extra) html += `<div style="font-size:12px; opacity:0.5; margin-top:8px;">${extra}</div>`;
+
+  document.getElementById('viewer-hud-content').innerHTML = html;
+  document.getElementById('viewer-hud').style.display = 'block';
+  document.getElementById('exitViewer').style.display = 'block';
+}
+
+function exitViewerMode() {
+  viewerMode = false;
+  document.getElementById('layers-panel').style.display = '';
+  document.getElementById('info').style.display = '';
+  document.querySelectorAll('.toggle-btn').forEach(b => b.style.display = '');
+  document.getElementById('qualitySelect').style.display = '';
+  axisHelper.visible = document.getElementById('cfgAxes').checked;
+  document.getElementById('viewer-hud').style.display = 'none';
+  document.getElementById('exitViewer').style.display = 'none';
+}
+
+// Tecla V para entrar/salir del visualizador
+window.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if (e.key === 'v' || e.key === 'V') {
+    if (viewerMode) exitViewerMode();
+    else document.getElementById('viewer-setup').style.display = 'block';
+  }
 });
 
 // Ctrl+Enter para ejecutar
