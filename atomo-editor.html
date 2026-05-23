@@ -373,7 +373,7 @@ controls.dampingFactor = 0.05;
 // Post-processing: Bloom (glow)
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
-const bloomPass = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.4, 0.6, 0.85);
+const bloomPass = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 1.2, 0.4, 0.1);
 composer.addPass(bloomPass);
 
 scene.add(new THREE.AmbientLight(0xffffff, 0.6));
@@ -584,8 +584,8 @@ function addPrimitive(shape, color, options = {}) {
     default: geometry = new THREE.SphereGeometry(sphereR, sSeg, sSeg); name = 'Objeto';
   }
   const material = new THREE.MeshStandardMaterial({
-    color: new THREE.Color(color), roughness: 0.35, metalness: 0.2,
-    emissive: new THREE.Color(color), emissiveIntensity: 0.15
+    color: new THREE.Color(color), roughness: 0.3, metalness: 0.1,
+    emissive: new THREE.Color(color), emissiveIntensity: 0.4
   });
   const mesh = new THREE.Mesh(geometry, material);
   const label = options.label !== undefined ? options.label : document.getElementById('new-obj-label').value.trim();
