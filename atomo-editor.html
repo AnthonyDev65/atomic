@@ -353,6 +353,9 @@ orbital(3, 1.5, 2, '#ff4444', '#44aaff', '#4466ff')"></textarea>
 <script type="module">
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.01, 1000);
@@ -367,11 +370,21 @@ const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.05;
 
+// Post-processing: Bloom (glow)
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloomPass = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.4, 0.6, 0.85);
+composer.addPass(bloomPass);
+
 scene.add(new THREE.AmbientLight(0xffffff, 0.6));
 const dirLight = new THREE.DirectionalLight(0x88aaff, 2);
 dirLight.position.set(5, 8, 5); scene.add(dirLight);
 const rimLight = new THREE.DirectionalLight(0x4466ff, 1);
 rimLight.position.set(-5, -2, -5); scene.add(rimLight);
+
+// Ejes de referencia (flechas RGB)
+const axisHelper = new THREE.AxesHelper(2);
+scene.add(axisHelper);
 
 // ===== ESTADO =====
 const layers = [];
@@ -570,7 +583,10 @@ function addPrimitive(shape, color, options = {}) {
     case 'plane': geometry = new THREE.PlaneGeometry(1, 1); name = 'Plano'; break;
     default: geometry = new THREE.SphereGeometry(sphereR, sSeg, sSeg); name = 'Objeto';
   }
-  const material = new THREE.MeshStandardMaterial({ color: new THREE.Color(color), roughness: 0.4, metalness: 0.3 });
+  const material = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(color), roughness: 0.35, metalness: 0.2,
+    emissive: new THREE.Color(color), emissiveIntensity: 0.15
+  });
   const mesh = new THREE.Mesh(geometry, material);
   const label = options.label !== undefined ? options.label : document.getElementById('new-obj-label').value.trim();
   mesh.name = options.importName || (label ? label : `${name}_${++layerCounter}`);
@@ -1177,11 +1193,16 @@ function animate() {
   // Outline sync
   if (outlineMesh && selectedObject) { outlineMesh.position.copy(selectedObject.position); outlineMesh.rotation.copy(selectedObject.rotation); outlineMesh.scale.copy(selectedObject.scale).multiplyScalar(1.02); }
   controls.update();
-  renderer.render(scene, camera);
+  composer.render();
 }
 animate();
 
-window.addEventListener('resize', () => { camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+window.addEventListener('resize', () => {
+  camera.aspect = innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+  composer.setSize(innerWidth, innerHeight);
+});
 
 // ===== TOGGLE PANELES =====
 document.getElementById('toggleLeft').addEventListener('click', () => {
