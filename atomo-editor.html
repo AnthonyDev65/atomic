@@ -701,6 +701,7 @@ function renderLayers() {
 // ===== SELECCIÓN =====
 renderer.domElement.addEventListener('click', (event) => {
   if (event.target !== renderer.domElement) return;
+  if (viewerMode) return;
   if (moveMode) { confirmMove(); return; }
   if (placingOnTorus) { confirmPlaceSphere(); return; }
   mouse.x = (event.clientX / innerWidth) * 2 - 1;
