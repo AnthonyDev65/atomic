@@ -182,9 +182,17 @@
 <!-- Config Panel -->
 <div id="config-panel" style="position:absolute; top:55px; left:50%; transform:translateX(-50%); width:320px; background:rgba(10,10,20,0.95); border:1px solid rgba(100,130,255,0.4); border-radius:12px; padding:16px; color:#ccc; font-size:12px; backdrop-filter:blur(10px); display:none; z-index:200;">
   <h4 style="color:#ffaa44; margin-bottom:12px; font-size:13px;">⚙️ Configuración Gráfica</h4>
+  <label style="display:flex; justify-content:space-between; margin-bottom:8px;"><span>Bloom Intensidad</span><input type="range" id="cfgBloomStrength" min="0" max="3" step="0.1" value="1.2" style="width:100px; accent-color:#88aaff;"><span id="cfgBloomStrengthVal" style="min-width:30px; text-align:right; color:#88aaff; font-family:monospace;">1.2</span></label>
+  <label style="display:flex; justify-content:space-between; margin-bottom:8px;"><span>Bloom Radio</span><input type="range" id="cfgBloomRadius" min="0" max="2" step="0.1" value="0.4" style="width:100px; accent-color:#88aaff;"><span id="cfgBloomRadiusVal" style="min-width:30px; text-align:right; color:#88aaff; font-family:monospace;">0.4</span></label>
+  <label style="display:flex; justify-content:space-between; margin-bottom:8px;"><span>Bloom Threshold</span><input type="range" id="cfgBloomThreshold" min="0" max="1" step="0.05" value="0.1" style="width:100px; accent-color:#88aaff;"><span id="cfgBloomThresholdVal" style="min-width:30px; text-align:right; color:#88aaff; font-family:monospace;">0.1</span></label>
+  <label style="display:flex; justify-content:space-between; margin-bottom:8px;"><span>Emissive Global</span><input type="range" id="cfgEmissive" min="0" max="1" step="0.05" value="0.4" style="width:100px; accent-color:#88aaff;"><span id="cfgEmissiveVal" style="min-width:30px; text-align:right; color:#88aaff; font-family:monospace;">0.4</span></label>
+  <label style="display:flex; justify-content:space-between; margin-bottom:8px;"><span>Exposición</span><input type="range" id="cfgExposure" min="0.5" max="3" step="0.1" value="1.2" style="width:100px; accent-color:#88aaff;"><span id="cfgExposureVal" style="min-width:30px; text-align:right; color:#88aaff; font-family:monospace;">1.2</span></label>
+  <label style="display:flex; justify-content:space-between; margin-bottom:8px;"><span>Mostrar ejes</span><input type="checkbox" id="cfgAxes" checked style="accent-color:#88aaff;"></label>
+  <button onclick="document.getElementById('config-panel').style.display='none'" style="width:100%; margin-top:8px; padding:6px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.2); color:#ccc; border-radius:6px; cursor:pointer; font-size:11px;">Cerrar</button>
+</div>
 
-<!-- Viewer Mode Setup (se muestra antes de entrar al modo) -->
-<div id="viewer-setup" style="position:absolute; top:55px; left:50%; transform:translateX(-50%); width:360px; background:rgba(10,10,20,0.95); border:1px solid rgba(100,200,100,0.4); border-radius:12px; padding:16px; color:#ccc; font-size:12px; backdrop-filter:blur(10px); display:none; z-index:200;">
+<!-- Viewer Mode Setup -->
+<div id="viewer-setup" style="position:absolute; top:55px; left:50%; transform:translateX(-50%); width:360px; background:rgba(10,10,20,0.95); border:1px solid rgba(100,200,100,0.4); border-radius:12px; padding:16px; color:#ccc; font-size:12px; backdrop-filter:blur(10px); display:none; z-index:250;">
   <h4 style="color:#88ff88; margin-bottom:12px; font-size:13px;">👁 Configurar Modo Visualizador</h4>
   <label style="display:block; margin-bottom:8px;"><span style="font-size:11px; color:#aaa;">Símbolo del elemento:</span>
     <input type="text" id="viewerSymbol" value="Ne" maxlength="3" style="width:100%; margin-top:4px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.2); color:#fff; border-radius:4px; padding:6px 8px; font-size:18px; text-align:center; font-weight:bold;">
@@ -198,7 +206,7 @@
   <label style="display:block; margin-bottom:8px;"><span style="font-size:11px; color:#aaa;">Masa atómica:</span>
     <input type="text" id="viewerMass" value="20.18" style="width:100%; margin-top:4px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.2); color:#fff; border-radius:4px; padding:6px 8px; font-size:13px;">
   </label>
-  <label style="display:block; margin-bottom:8px;"><span style="font-size:11px; color:#aaa;">Configuración electrónica (usar ^ para superíndice, ej: 1s^2 2s^2 2p^6):</span>
+  <label style="display:block; margin-bottom:8px;"><span style="font-size:11px; color:#aaa;">Configuración electrónica (usar ^ para superíndice):</span>
     <input type="text" id="viewerConfig" value="1s^2 2s^2 2p^6" style="width:100%; margin-top:4px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.2); color:#fff; border-radius:4px; padding:6px 8px; font-size:13px; font-family:monospace;">
   </label>
   <label style="display:block; margin-bottom:8px;"><span style="font-size:11px; color:#aaa;">Info extra (opcional):</span>
@@ -213,14 +221,6 @@
   <div id="viewer-hud-content" style="color:#fff; font-family:'Segoe UI',sans-serif;"></div>
 </div>
 <button id="exitViewer" style="position:absolute; bottom:24px; right:24px; padding:10px 20px; background:rgba(255,80,80,0.3); border:1px solid rgba(255,80,80,0.5); color:#ff8888; border-radius:8px; cursor:pointer; font-size:12px; display:none; z-index:150;">✕ Salir del Visualizador</button>
-  <label style="display:flex; justify-content:space-between; margin-bottom:8px;"><span>Bloom Intensidad</span><input type="range" id="cfgBloomStrength" min="0" max="3" step="0.1" value="1.2" style="width:100px; accent-color:#88aaff;"><span id="cfgBloomStrengthVal" style="min-width:30px; text-align:right; color:#88aaff; font-family:monospace;">1.2</span></label>
-  <label style="display:flex; justify-content:space-between; margin-bottom:8px;"><span>Bloom Radio</span><input type="range" id="cfgBloomRadius" min="0" max="2" step="0.1" value="0.4" style="width:100px; accent-color:#88aaff;"><span id="cfgBloomRadiusVal" style="min-width:30px; text-align:right; color:#88aaff; font-family:monospace;">0.4</span></label>
-  <label style="display:flex; justify-content:space-between; margin-bottom:8px;"><span>Bloom Threshold</span><input type="range" id="cfgBloomThreshold" min="0" max="1" step="0.05" value="0.1" style="width:100px; accent-color:#88aaff;"><span id="cfgBloomThresholdVal" style="min-width:30px; text-align:right; color:#88aaff; font-family:monospace;">0.1</span></label>
-  <label style="display:flex; justify-content:space-between; margin-bottom:8px;"><span>Emissive Global</span><input type="range" id="cfgEmissive" min="0" max="1" step="0.05" value="0.4" style="width:100px; accent-color:#88aaff;"><span id="cfgEmissiveVal" style="min-width:30px; text-align:right; color:#88aaff; font-family:monospace;">0.4</span></label>
-  <label style="display:flex; justify-content:space-between; margin-bottom:8px;"><span>Exposición</span><input type="range" id="cfgExposure" min="0.5" max="3" step="0.1" value="1.2" style="width:100px; accent-color:#88aaff;"><span id="cfgExposureVal" style="min-width:30px; text-align:right; color:#88aaff; font-family:monospace;">1.2</span></label>
-  <label style="display:flex; justify-content:space-between; margin-bottom:8px;"><span>Mostrar ejes</span><input type="checkbox" id="cfgAxes" checked style="accent-color:#88aaff;"></label>
-  <button onclick="document.getElementById('config-panel').style.display='none'" style="width:100%; margin-top:8px; padding:6px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.2); color:#ccc; border-radius:6px; cursor:pointer; font-size:11px;">Cerrar</button>
-</div>
 
 <!-- Script Console -->
 <div id="script-console">
