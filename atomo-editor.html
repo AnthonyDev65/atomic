@@ -276,10 +276,10 @@ orbital(3, 1.5, 2, '#ff4444', '#44aaff', '#4466ff')"></textarea>
       <label><span>Color:</span><input type="color" id="ptcColor" value="#ffaa44"></label>
       <label><span>Forma:</span>
         <select id="ptcShape" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.2); color:#fff; border-radius:4px; padding:2px 6px; font-size:11px;">
-          <option value="sphere">Esférica</option>
-          <option value="jet">Chorro (jet)</option>
-          <option value="ring">Anillo</option>
-          <option value="explosion">Explosión</option>
+          <option value="sphere">Nube esférica</option>
+          <option value="shell">Cáscara</option>
+          <option value="ring">Disco/Anillo</option>
+          <option value="jet">Bipolar (jet)</option>
         </select>
       </label>
     </div>
@@ -1012,8 +1012,8 @@ document.getElementById('btnCreateOrbital').addEventListener('click', () => {
   renderLayers();
 });
 
-// ===== EMISOR DE PARTÍCULAS =====
-const particleSystems = []; // { points, velocities, shape, speed, radius }
+// ===== NUBE DE PARTÍCULAS =====
+const particleSystems = []; // { points, basePositions, shimmerSpeed }
 
 document.getElementById('btnCreateParticles').addEventListener('click', () => {
   const count = parseInt(document.getElementById('ptcCount').value) || 200;
@@ -1024,40 +1024,47 @@ document.getElementById('btnCreateParticles').addEventListener('click', () => {
   const shape = document.getElementById('ptcShape').value;
 
   const positions = new Float32Array(count * 3);
-  const velocities = new Float32Array(count * 3);
+  const basePositions = new Float32Array(count * 3);
 
   for (let i = 0; i < count; i++) {
     const i3 = i * 3;
-    // Posición inicial: centro
-    positions[i3] = 0;
-    positions[i3 + 1] = 0;
-    positions[i3 + 2] = 0;
+    let x, y, z;
 
-    // Velocidad según forma
-    let vx, vy, vz;
     if (shape === 'sphere') {
+      // Distribución esférica (más densa al centro)
+      const r = radius * Math.pow(Math.random(), 0.5);
       const theta = Math.random() * Math.PI * 2;
       const phi = Math.acos(2 * Math.random() - 1);
-      vx = Math.sin(phi) * Math.cos(theta);
-      vy = Math.sin(phi) * Math.sin(theta);
-      vz = Math.cos(phi);
+      x = r * Math.sin(phi) * Math.cos(theta);
+      y = r * Math.sin(phi) * Math.sin(theta);
+      z = r * Math.cos(phi);
     } else if (shape === 'jet') {
-      vx = (Math.random() - 0.5) * 0.3;
-      vy = Math.random();
-      vz = (Math.random() - 0.5) * 0.3;
-    } else if (shape === 'ring') {
+      // Dos conos opuestos (bipolar)
+      const dir = Math.random() > 0.5 ? 1 : -1;
+      const h = Math.random() * radius * dir;
+      const spread = Math.abs(h) * 0.3 * Math.random();
       const angle = Math.random() * Math.PI * 2;
-      vx = Math.cos(angle);
-      vy = (Math.random() - 0.5) * 0.2;
-      vz = Math.sin(angle);
-    } else { // explosion
-      vx = (Math.random() - 0.5) * 2;
-      vy = (Math.random() - 0.5) * 2;
-      vz = (Math.random() - 0.5) * 2;
+      x = spread * Math.cos(angle);
+      y = h;
+      z = spread * Math.sin(angle);
+    } else if (shape === 'ring') {
+      // Anillo/disco con grosor
+      const angle = Math.random() * Math.PI * 2;
+      const r = radius * (0.5 + Math.random() * 0.5);
+      x = r * Math.cos(angle);
+      y = (Math.random() - 0.5) * radius * 0.15;
+      z = r * Math.sin(angle);
+    } else { // shell - cáscara esférica
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.acos(2 * Math.random() - 1);
+      const r = radius * (0.8 + Math.random() * 0.2);
+      x = r * Math.sin(phi) * Math.cos(theta);
+      y = r * Math.sin(phi) * Math.sin(theta);
+      z = r * Math.cos(phi);
     }
-    velocities[i3] = vx;
-    velocities[i3 + 1] = vy;
-    velocities[i3 + 2] = vz;
+
+    positions[i3] = x; positions[i3+1] = y; positions[i3+2] = z;
+    basePositions[i3] = x; basePositions[i3+1] = y; basePositions[i3+2] = z;
   }
 
   const geometry = new THREE.BufferGeometry();
@@ -1067,18 +1074,18 @@ document.getElementById('btnCreateParticles').addEventListener('click', () => {
     color: new THREE.Color(color),
     size,
     transparent: true,
-    opacity: 0.85,
+    opacity: 0.9,
     blending: THREE.AdditiveBlending,
     depthWrite: false
   });
 
   const points = new THREE.Points(geometry, material);
-  points.name = `Partículas_${++layerCounter}`;
+  points.name = `Nube_${++layerCounter}`;
   scene.add(points);
   selectableMeshes.push(points);
   layers.push({ id: points.uuid, name: points.name, obj: points, visible: true, type: 'sphere', color });
 
-  particleSystems.push({ points, velocities, speed, radius, shape });
+  particleSystems.push({ points, basePositions, shimmerSpeed: speed, time: Math.random() * 100 });
   renderLayers();
 });
 
@@ -1295,21 +1302,19 @@ function animate() {
     }
     orb.electron.position.copy(pos);
   });
-  // Partículas
+  // Partículas: vibración sutil (shimmer)
   particleSystems.forEach(ps => {
+    ps.time += delta * ps.shimmerSpeed;
     const posAttr = ps.points.geometry.getAttribute('position');
     const positions = posAttr.array;
+    const base = ps.basePositions;
     const count = positions.length / 3;
     for (let i = 0; i < count; i++) {
       const i3 = i * 3;
-      positions[i3] += ps.velocities[i3] * ps.speed * delta;
-      positions[i3+1] += ps.velocities[i3+1] * ps.speed * delta;
-      positions[i3+2] += ps.velocities[i3+2] * ps.speed * delta;
-      // Si sale del radio, resetear al centro
-      const dist = Math.sqrt(positions[i3]**2 + positions[i3+1]**2 + positions[i3+2]**2);
-      if (dist > ps.radius) {
-        positions[i3] = 0; positions[i3+1] = 0; positions[i3+2] = 0;
-      }
+      const offset = Math.sin(ps.time + i * 0.7) * 0.02 + Math.cos(ps.time * 1.3 + i * 1.1) * 0.015;
+      positions[i3] = base[i3] + offset;
+      positions[i3+1] = base[i3+1] + Math.cos(ps.time + i * 0.9) * 0.02;
+      positions[i3+2] = base[i3+2] + Math.sin(ps.time * 0.8 + i * 1.3) * 0.015;
     }
     posAttr.needsUpdate = true;
   });
