@@ -264,6 +264,28 @@ orbital(3, 1.5, 2, '#ff4444', '#44aaff', '#4466ff')"></textarea>
     </div>
     <button class="orbital-btn" id="btnCreateOrbital">⚛️ Generar Orbital Completo</button>
   </div>
+
+  <!-- Emisor de Partículas -->
+  <div id="particle-section" style="margin-top:16px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.1);">
+    <div class="section-title" style="color:#ff88cc;">✨ Emisor de Partículas</div>
+    <div class="orbital-config">
+      <label><span>Cantidad:</span><input type="number" id="ptcCount" min="10" max="2000" step="10" value="200"></label>
+      <label><span>Radio dispersión:</span><input type="number" id="ptcRadius" min="0.5" max="20" step="0.5" value="3"></label>
+      <label><span>Tamaño partícula:</span><input type="number" id="ptcSize" min="0.01" max="0.5" step="0.01" value="0.04"></label>
+      <label><span>Velocidad:</span><input type="number" id="ptcSpeed" min="0" max="10" step="0.5" value="2"></label>
+      <label><span>Color:</span><input type="color" id="ptcColor" value="#ffaa44"></label>
+      <label><span>Forma:</span>
+        <select id="ptcShape" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.2); color:#fff; border-radius:4px; padding:2px 6px; font-size:11px;">
+          <option value="sphere">Esférica</option>
+          <option value="jet">Chorro (jet)</option>
+          <option value="ring">Anillo</option>
+          <option value="explosion">Explosión</option>
+        </select>
+      </label>
+    </div>
+    <button class="orbital-btn" id="btnCreateParticles" style="background:rgba(255,136,204,0.2); border-color:rgba(255,136,204,0.4); color:#ffaadd;">✨ Crear Emisor</button>
+  </div>
+
   <div id="file-actions">
     <div class="section-title">💾 Proyecto</div>
     <button class="file-btn export" id="btnExport">📤 Exportar proyecto (.atomo)</button>
@@ -990,6 +1012,76 @@ document.getElementById('btnCreateOrbital').addEventListener('click', () => {
   renderLayers();
 });
 
+// ===== EMISOR DE PARTÍCULAS =====
+const particleSystems = []; // { points, velocities, shape, speed, radius }
+
+document.getElementById('btnCreateParticles').addEventListener('click', () => {
+  const count = parseInt(document.getElementById('ptcCount').value) || 200;
+  const radius = parseFloat(document.getElementById('ptcRadius').value) || 3;
+  const size = parseFloat(document.getElementById('ptcSize').value) || 0.04;
+  const speed = parseFloat(document.getElementById('ptcSpeed').value) || 2;
+  const color = document.getElementById('ptcColor').value;
+  const shape = document.getElementById('ptcShape').value;
+
+  const positions = new Float32Array(count * 3);
+  const velocities = new Float32Array(count * 3);
+
+  for (let i = 0; i < count; i++) {
+    const i3 = i * 3;
+    // Posición inicial: centro
+    positions[i3] = 0;
+    positions[i3 + 1] = 0;
+    positions[i3 + 2] = 0;
+
+    // Velocidad según forma
+    let vx, vy, vz;
+    if (shape === 'sphere') {
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.acos(2 * Math.random() - 1);
+      vx = Math.sin(phi) * Math.cos(theta);
+      vy = Math.sin(phi) * Math.sin(theta);
+      vz = Math.cos(phi);
+    } else if (shape === 'jet') {
+      vx = (Math.random() - 0.5) * 0.3;
+      vy = Math.random();
+      vz = (Math.random() - 0.5) * 0.3;
+    } else if (shape === 'ring') {
+      const angle = Math.random() * Math.PI * 2;
+      vx = Math.cos(angle);
+      vy = (Math.random() - 0.5) * 0.2;
+      vz = Math.sin(angle);
+    } else { // explosion
+      vx = (Math.random() - 0.5) * 2;
+      vy = (Math.random() - 0.5) * 2;
+      vz = (Math.random() - 0.5) * 2;
+    }
+    velocities[i3] = vx;
+    velocities[i3 + 1] = vy;
+    velocities[i3 + 2] = vz;
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+  const material = new THREE.PointsMaterial({
+    color: new THREE.Color(color),
+    size,
+    transparent: true,
+    opacity: 0.85,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false
+  });
+
+  const points = new THREE.Points(geometry, material);
+  points.name = `Partículas_${++layerCounter}`;
+  scene.add(points);
+  selectableMeshes.push(points);
+  layers.push({ id: points.uuid, name: points.name, obj: points, visible: true, type: 'sphere', color });
+
+  particleSystems.push({ points, velocities, speed, radius, shape });
+  renderLayers();
+});
+
 // ===== MODO MOVER (Blender) =====
 function enterMoveMode() { if (!selectedObject) return; moveMode = true; moveAxis = null; moveStartPos = selectedObject.position.clone(); controls.enabled = false; updateMoveIndicator(); }
 function cancelMove() { if (!moveMode || !selectedObject) return; selectedObject.position.copy(moveStartPos); exitMoveMode(); updatePositionUI(); }
@@ -1202,6 +1294,24 @@ function animate() {
       pos.add(orb.center);
     }
     orb.electron.position.copy(pos);
+  });
+  // Partículas
+  particleSystems.forEach(ps => {
+    const posAttr = ps.points.geometry.getAttribute('position');
+    const positions = posAttr.array;
+    const count = positions.length / 3;
+    for (let i = 0; i < count; i++) {
+      const i3 = i * 3;
+      positions[i3] += ps.velocities[i3] * ps.speed * delta;
+      positions[i3+1] += ps.velocities[i3+1] * ps.speed * delta;
+      positions[i3+2] += ps.velocities[i3+2] * ps.speed * delta;
+      // Si sale del radio, resetear al centro
+      const dist = Math.sqrt(positions[i3]**2 + positions[i3+1]**2 + positions[i3+2]**2);
+      if (dist > ps.radius) {
+        positions[i3] = 0; positions[i3+1] = 0; positions[i3+2] = 0;
+      }
+    }
+    posAttr.needsUpdate = true;
   });
   // Outline sync
   if (outlineMesh && selectedObject) { outlineMesh.position.copy(selectedObject.position); outlineMesh.rotation.copy(selectedObject.rotation); outlineMesh.scale.copy(selectedObject.scale).multiplyScalar(1.02); }
