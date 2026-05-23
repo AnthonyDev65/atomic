@@ -679,7 +679,7 @@ function addPrimitive(shape, color, options = {}) {
 function renderLayers() {
   layersList.innerHTML = '';
   const MAX_VISIBLE = 50;
-  const icons = { sphere:'⚪', box:'⬜', torus:'⭕', cylinder:'🔷', cone:'🔺', icosahedron:'🔶', plane:'📄' };
+  const icons = { sphere:'⚪', box:'⬜', torus:'⭕', cylinder:'🔷', cone:'🔺', icosahedron:'🔶', plane:'📄', particles:'✨' };
   const count = layers.length;
   const showLayers = count > MAX_VISIBLE ? layers.slice(0, MAX_VISIBLE) : layers;
   showLayers.forEach(layer => {
@@ -1129,9 +1129,9 @@ document.getElementById('btnCreateParticles').addEventListener('click', () => {
   points.name = `Nube_${++layerCounter}`;
   scene.add(points);
   selectableMeshes.push(points);
-  layers.push({ id: points.uuid, name: points.name, obj: points, visible: true, type: 'sphere', color });
+  layers.push({ id: points.uuid, name: points.name, obj: points, visible: true, type: 'particles', color });
 
-  particleSystems.push({ points, basePositions, shimmerSpeed: speed, time: Math.random() * 100 });
+  particleSystems.push({ points, basePositions, shimmerSpeed: speed, time: Math.random() * 100, count, radius, size, shape });
   renderLayers();
 });
 
@@ -1194,7 +1194,6 @@ function exportProject() {
     const orbDataPaused = pausedOrbitales.find(o => o.electron === obj);
     const orbInfo = orbData || orbDataPaused;
     if (orbInfo) {
-      // Guardar índice del torus padre en el array de layers
       let parentIndex = -1;
       if (orbInfo.parentTorus) {
         parentIndex = layers.findIndex(l => l.obj === orbInfo.parentTorus);
@@ -1202,6 +1201,11 @@ function exportProject() {
       od.orbital = { radius: orbInfo.radius, speed: orbInfo.speed, angle: orbInfo.angle, tiltX: orbInfo.tiltX, tiltZ: orbInfo.tiltZ,
         center: { x: orbInfo.center.x, y: orbInfo.center.y, z: orbInfo.center.z },
         parentIndex };
+    }
+    // Partículas: guardar parámetros
+    const psData = particleSystems.find(p => p.points === obj);
+    if (psData) {
+      od.particles = { count: psData.count, radius: psData.radius, size: psData.size, speed: psData.shimmerSpeed, shape: psData.shape };
     }
     data.objects.push(od);
   });
@@ -1218,6 +1222,24 @@ function importProject(data) {
   // Primera pasada: crear todos los objetos
   const importedMeshes = [];
   data.objects.forEach(od => {
+    // Partículas: recrear como sistema de puntos
+    if (od.type === 'particles' && od.particles) {
+      document.getElementById('ptcCount').value = od.particles.count;
+      document.getElementById('ptcRadius').value = od.particles.radius;
+      document.getElementById('ptcSize').value = od.particles.size;
+      document.getElementById('ptcSpeed').value = od.particles.speed;
+      document.getElementById('ptcColor').value = od.color;
+      document.getElementById('ptcShape').value = od.particles.shape;
+      document.getElementById('btnCreateParticles').click();
+      const lastPts = particleSystems[particleSystems.length - 1];
+      if (lastPts) {
+        lastPts.points.position.set(od.position.x, od.position.y, od.position.z);
+        importedMeshes.push(lastPts.points);
+      } else {
+        importedMeshes.push(null);
+      }
+      return;
+    }
     const mesh = addPrimitive(od.type, od.color, {
       position: od.position,
       scale: od.scale,
@@ -1276,6 +1298,7 @@ function clearScene() {
   etiquetas.clear();
   orbitales.length = 0;
   pausedOrbitales.length = 0;
+  particleSystems.length = 0;
   renderLayers();
 }
 
