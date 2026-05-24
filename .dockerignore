@@ -3,7 +3,6 @@
 .gitignore
 .dockerignore
 Dockerfile
-nginx.conf
 README.md
 mercurio.md
 mercurio-mecanocuantico.md
