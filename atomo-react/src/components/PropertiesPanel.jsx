@@ -1,4 +1,6 @@
 import { useStore } from '../store/useStore'
+import { useState } from 'react'
+import DragInput from './DragInput'
 
 export default function PropertiesPanel() {
   const { layers, selectedId, rightPanelOpen, viewerMode, updateLayer, removeLayer, deselect } = useStore()
@@ -14,72 +16,83 @@ export default function PropertiesPanel() {
   const rot = layer.rotation || [0, 0, 0]
 
   return (
-    <div className="absolute top-14 right-4 w-72 max-h-[85vh] overflow-y-auto bg-slate-950/95 border border-indigo-500/30 rounded-xl p-4 backdrop-blur-md z-40">
-      <h3 className="text-indigo-300 font-semibold text-sm mb-3">🎛 Propiedades</h3>
-      <div className="px-2 py-1.5 bg-indigo-500/10 rounded-md text-white text-xs font-medium mb-3 break-all">
-        {layer.name}
+    <div className="absolute top-12 right-3 w-64 max-h-[calc(100vh-70px)] overflow-y-auto bg-[#252525] border border-[#3d3d3d] rounded-lg shadow-xl z-40">
+      {/* Header */}
+      <div className="sticky top-0 bg-[#252525] border-b border-[#3d3d3d] px-3 py-2.5 z-10">
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] text-[#888] uppercase tracking-wider font-medium">Properties</span>
+          <button onClick={deselect} className="text-[#666] hover:text-white text-xs transition">✕</button>
+        </div>
+        <div className="flex items-center gap-2 mt-1.5">
+          <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: layer.color }} />
+          <span className="text-white text-xs font-medium truncate">{layer.name}</span>
+        </div>
       </div>
 
-      {/* Color & Opacity */}
-      <Section title="🎨 Color">
-        <Row label="Color">
-          <input type="color" value={layer.color} onChange={(e) => update('color', e.target.value)}
-            className="w-12 h-7 border-0 cursor-pointer bg-transparent" />
-        </Row>
-        <Row label="Opacidad">
-          <input type="range" min={0.05} max={1} step={0.05} value={layer.opacity ?? 1}
-            onChange={(e) => update('opacity', +e.target.value)}
-            className="w-24 accent-indigo-400" />
-          <span className="text-indigo-300 font-mono text-[11px] w-8 text-right">{(layer.opacity ?? 1).toFixed(2)}</span>
-        </Row>
-      </Section>
+      <div className="p-3 space-y-0">
+        {/* Color */}
+        <Section title="Appearance">
+          <PropRow label="Color">
+            <input type="color" value={layer.color} onChange={(e) => update('color', e.target.value)}
+              className="w-7 h-5 rounded cursor-pointer bg-transparent border border-[#3d3d3d]" />
+          </PropRow>
+          <PropRow label="Opacity">
+            <input type="range" min={0.05} max={1} step={0.05} value={layer.opacity ?? 1}
+              onChange={(e) => update('opacity', +e.target.value)}
+              className="w-20 h-1 accent-[#4c8bf5] cursor-pointer" />
+            <span className="text-[10px] text-[#888] font-mono w-7 text-right">{(layer.opacity ?? 1).toFixed(1)}</span>
+          </PropRow>
+        </Section>
 
-      {/* Position */}
-      <Section title="Posición">
-        {['X', 'Y', 'Z'].map((axis, i) => (
-          <Row key={axis} label={axis}>
-            <input type="number" step={0.1} value={pos[i]?.toFixed(2)}
-              onChange={(e) => { const p = [...pos]; p[i] = +e.target.value; update('position', p) }}
-              className="w-16 px-1 py-0.5 bg-white/5 border border-white/15 rounded text-white text-xs text-center" />
-          </Row>
-        ))}
-      </Section>
+        {/* Transform */}
+        <Section title="Position">
+          <Vec3Input values={pos} onChange={(v) => update('position', v)} step={0.1} />
+        </Section>
 
-      {/* Scale */}
-      <Section title="Escala">
-        {['X', 'Y', 'Z'].map((axis, i) => (
-          <Row key={axis} label={axis}>
-            <input type="number" step={0.1} min={0.01} value={scale[i]?.toFixed(2)}
-              onChange={(e) => {
-                const v = +e.target.value
-                update('scale', [v, v, v]) // uniform by default
-              }}
-              className="w-16 px-1 py-0.5 bg-white/5 border border-white/15 rounded text-white text-xs text-center" />
-          </Row>
-        ))}
-      </Section>
+        <Section title="Scale">
+          <Vec3Input values={scale} onChange={(v) => update('scale', v)} step={0.1} min={0.01} uniform />
+        </Section>
 
-      {/* Rotation */}
-      <Section title="Rotación (grados)">
-        {['X', 'Y', 'Z'].map((axis, i) => (
-          <Row key={axis} label={axis}>
-            <input type="number" step={5} value={Math.round((rot[i] || 0) * 180 / Math.PI)}
-              onChange={(e) => { const r = [...rot]; r[i] = +e.target.value * Math.PI / 180; update('rotation', r) }}
-              className="w-16 px-1 py-0.5 bg-white/5 border border-white/15 rounded text-white text-xs text-center" />
-          </Row>
-        ))}
-      </Section>
+        <Section title="Rotation">
+          <Vec3Input
+            values={rot.map(r => Math.round(r * 180 / Math.PI))}
+            onChange={(v) => update('rotation', v.map(d => d * Math.PI / 180))}
+            step={5}
+            labels={['X°', 'Y°', 'Z°']}
+          />
+        </Section>
 
-      {/* Actions */}
-      <div className="mt-4 space-y-2">
-        <button onClick={() => { removeLayer(selectedId); deselect() }}
-          className="w-full py-2 rounded-md bg-red-500/20 border border-red-500/40 text-red-300 text-xs hover:bg-red-500/30 transition">
-          🗑 Eliminar objeto
-        </button>
-        <button onClick={deselect}
-          className="w-full py-2 rounded-md bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 text-xs hover:bg-indigo-500/25 transition">
-          Deseleccionar
-        </button>
+        {/* Torus-specific */}
+        {(layer.type === 'torus' || layer.type === 'orbital_p' || layer.type === 'orbital_d' || layer.type === 'orbital_f') && (
+          <Section title={layer.type === 'torus' ? 'Orbital S' : layer.type.replace('orbital_', 'Orbital ').toUpperCase()}>
+            <PropRow label="Radius">
+              <DragInput label="R" value={layer.torusRadius || 0.5} onChange={(v) => update('torusRadius', v)} step={0.05} min={0.1} color="#f80" />
+            </PropRow>
+            <PropRow label="Thickness">
+              <DragInput label="T" value={layer.tubeThickness || 0.1} onChange={(v) => update('tubeThickness', v)} step={0.005} min={0.005} color="#f80" />
+            </PropRow>
+            <PropRow label="Path offset">
+              <DragInput label="O" value={layer.pathOffset || 0} onChange={(v) => update('pathOffset', v)} step={0.05} min={0} color="#f80" />
+            </PropRow>
+          </Section>
+        )}
+
+        {/* Add electron to orbital */}
+        {(layer.type === 'torus' || layer.type === 'orbital_p' || layer.type === 'orbital_d' || layer.type === 'orbital_f') && (
+          <Section title="Electrons on orbit">
+            <AddElectronToOrbit layer={layer} />
+          </Section>
+        )}
+
+        {/* Delete */}
+        <div className="pt-3 mt-1 border-t border-[#333]">
+          <button
+            onClick={() => { removeLayer(selectedId); deselect() }}
+            className="w-full py-1.5 rounded bg-[#3a2020] border border-[#5a3030] text-[#e88] text-[11px] hover:bg-[#4a2525] transition"
+          >
+            Delete
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -87,18 +100,120 @@ export default function PropertiesPanel() {
 
 function Section({ title, children }) {
   return (
-    <div className="mt-3 pt-3 border-t border-white/10">
-      <p className="text-[10px] uppercase tracking-wider text-gray-500 mb-2">{title}</p>
+    <div className="py-2.5 border-b border-[#333] last:border-0">
+      <p className="text-[9px] text-[#666] uppercase tracking-wider font-medium mb-2">{title}</p>
       {children}
     </div>
   )
 }
 
-function Row({ label, children }) {
+function PropRow({ label, children }) {
   return (
     <div className="flex items-center justify-between mb-1.5">
-      <span className="text-gray-400 text-xs min-w-[60px]">{label}</span>
-      <div className="flex items-center gap-1">{children}</div>
+      <span className="text-[11px] text-[#999]">{label}</span>
+      <div className="flex items-center gap-1.5">{children}</div>
+    </div>
+  )
+}
+
+function AddElectronToOrbit({ layer }) {
+  const { addLayer, incrementCounter, layers, groups, addToGroup } = useStore()
+  const [eColor, setEColor] = useState('#44aaff')
+  const [eSize, setESize] = useState(0.08)
+  const [eSpeed, setESpeed] = useState(2)
+
+  const addElectron = () => {
+    const radius = (layer.torusRadius || 0.5) + (layer.pathOffset || 0)
+    const rot = layer.rotation || [0, 0, 0]
+    const pathType = layer.type // 'torus', 'orbital_p', 'orbital_d', 'orbital_f'
+
+    // Find how many electrons already orbit this path
+    const existing = layers.filter(l => l.orbital &&
+      l.orbital.pathType === pathType &&
+      Math.abs(l.orbital.tiltX - rot[0]) < 0.05 &&
+      Math.abs(l.orbital.tiltZ - rot[2]) < 0.05 &&
+      Math.abs(l.orbital.radius - radius) < 0.05
+    )
+
+    const count = existing.length + 1
+    const angleStep = (Math.PI * 2) / count
+
+    // Redistribute existing electrons equidistantly
+    existing.forEach((el, i) => {
+      useStore.getState().updateLayer(el.id, {
+        orbital: { ...el.orbital, angle: angleStep * i, speed: eSpeed }
+      })
+    })
+
+    // Create new electron
+    const eId = crypto.randomUUID()
+    const angle = angleStep * (count - 1)
+    addLayer({
+      id: eId,
+      name: `e⁻_${incrementCounter()}`,
+      type: 'sphere',
+      color: eColor,
+      position: [radius, 0, 0],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+      visible: true,
+      opacity: 1,
+      sphereRadius: eSize,
+      label: 'e',
+      orbital: { radius, speed: eSpeed, angle, tiltX: rot[0], tiltZ: rot[2], pathType, parentId: layer.id }
+    })
+
+    // Add to same group if orbital is in a group
+    const group = groups.find(g => g.children.includes(layer.id))
+    if (group) addToGroup(group.id, eId)
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <PropRow label="Color">
+        <input type="color" value={eColor} onChange={(e) => setEColor(e.target.value)}
+          className="w-6 h-4 rounded cursor-pointer bg-transparent border border-[#3d3d3d]" />
+      </PropRow>
+      <PropRow label="Size">
+        <DragInput label="S" value={eSize} onChange={setESize} step={0.01} min={0.02} color="#4af" />
+      </PropRow>
+      <PropRow label="Speed">
+        <DragInput label="V" value={eSpeed} onChange={setESpeed} step={0.5} min={0.5} color="#4af" />
+      </PropRow>
+      <button onClick={addElectron}
+        className="w-full py-1.5 rounded bg-[#1a2a3a] border border-[#2a4a6a] text-[#6af] text-[10px] font-medium hover:bg-[#203050] transition">
+        Add orbiting electron
+      </button>
+    </div>
+  )
+}
+
+function Vec3Input({ values, onChange, step = 1, min, labels = ['X', 'Y', 'Z'], uniform = false }) {
+  const colors = ['#e55', '#5b5', '#55e']
+
+  const handleChange = (i, val) => {
+    if (uniform) {
+      onChange([val, val, val])
+    } else {
+      const v = [...values]
+      v[i] = val
+      onChange(v)
+    }
+  }
+
+  return (
+    <div className="flex gap-1">
+      {values.map((v, i) => (
+        <DragInput
+          key={i}
+          label={labels[i]}
+          value={typeof v === 'number' ? v : 0}
+          onChange={(val) => handleChange(i, val)}
+          step={step}
+          min={min}
+          color={colors[i]}
+        />
+      ))}
     </div>
   )
 }
