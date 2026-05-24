@@ -163,9 +163,18 @@ function AddElectronToOrbit({ layer }) {
       orbital: { radius, speed: eSpeed, angle, tiltX: rot[0], tiltZ: rot[2], pathType, parentId: layer.id }
     })
 
-    // Add to same group if orbital is in a group
+    // Add to same group as orbital, or create a new group for both
     const group = groups.find(g => g.children.includes(layer.id))
-    if (group) addToGroup(group.id, eId)
+    if (group) {
+      addToGroup(group.id, eId)
+    } else {
+      // Create a group for this orbital and its electrons
+      const groupId = useStore.getState().addGroup(`${layer.name || 'Orbital'}_group`)
+      useStore.getState().addToGroup(groupId, layer.id)
+      useStore.getState().addToGroup(groupId, eId)
+      // Also add any existing electrons of this orbital to the group
+      existing.forEach(el => useStore.getState().addToGroup(groupId, el.id))
+    }
   }
 
   return (
