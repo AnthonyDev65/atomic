@@ -3,4 +3,9 @@
 .gitignore
 .dockerignore
 Dockerfile
+nginx.conf
 README.md
+mercurio.md
+mercurio-mecanocuantico.md
+atomo-react/node_modules
+atomo-react/dist
