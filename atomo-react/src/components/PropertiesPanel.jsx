@@ -37,10 +37,7 @@ export default function PropertiesPanel() {
               className="w-7 h-5 rounded cursor-pointer bg-transparent border border-[#3d3d3d]" />
           </PropRow>
           <PropRow label="Opacity">
-            <input type="range" min={0} max={1} step={0.05} value={layer.opacity ?? 1}
-              onChange={(e) => update('opacity', +e.target.value)}
-              className="w-20 h-1 accent-[#4c8bf5] cursor-pointer" />
-            <span className="text-[10px] text-[#888] font-mono w-7 text-right">{(layer.opacity ?? 1).toFixed(1)}</span>
+            <DragInput label="O" value={layer.opacity ?? 1} onChange={(v) => update('opacity', Math.max(0, Math.min(1, v)))} step={0.01} min={0} color="#888" />
           </PropRow>
         </Section>
 
