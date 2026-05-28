@@ -96,6 +96,7 @@ export default function WaveSphere({ layer }) {
           transparent
           opacity={layer.opacity ?? 0.4}
           side={THREE.DoubleSide}
+          depthWrite={false}
           wireframe={layer.waveWireframe || false}
         />
       </mesh>

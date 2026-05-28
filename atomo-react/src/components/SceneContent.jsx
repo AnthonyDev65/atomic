@@ -245,9 +245,9 @@ function SceneObject({ layer }) {
       <mesh ref={meshRef} position={pos} rotation={rot} scale={scl} onClick={handleClick} visible={layer.visible !== false}>
         <GeometryMemo layer={layer} />
         {labelTexture ? (
-          <meshStandardMaterial map={labelTexture} emissive={color} emissiveIntensity={emissiveIntensity * 0.8} roughness={0.5} metalness={0} transparent opacity={layer.opacity ?? 1} />
+          <meshStandardMaterial map={labelTexture} emissive={color} emissiveIntensity={emissiveIntensity * 0.8} roughness={0.5} metalness={0} transparent opacity={layer.opacity ?? 1} depthWrite={(layer.opacity ?? 1) >= 1} />
         ) : (
-          <meshStandardMaterial color={color} emissive={color} emissiveIntensity={emissiveIntensity} roughness={0.3} metalness={0.1} transparent opacity={layer.opacity ?? 1} />
+          <meshStandardMaterial color={color} emissive={color} emissiveIntensity={emissiveIntensity} roughness={0.3} metalness={0.1} transparent opacity={layer.opacity ?? 1} depthWrite={(layer.opacity ?? 1) >= 1} />
         )}
       </mesh>
       {isSelected && layer.visible !== false && (
