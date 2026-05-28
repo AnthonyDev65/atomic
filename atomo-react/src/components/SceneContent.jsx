@@ -3,6 +3,7 @@ import { useFrame, useThree } from '@react-three/fiber'
 import { TransformControls } from '@react-three/drei'
 import { useStore } from '../store/useStore'
 import ParticleCloud from './ParticleCloud'
+import WaveSphere from './WaveSphere'
 import { PorbitalGeometry, DorbitalGeometry, ForbitalGeometry, getOrbitalPoint } from './OrbitalGeometry'
 import * as THREE from 'three'
 
@@ -34,6 +35,8 @@ export default function SceneContent({ orbitRef }) {
       {layers.map((layer) => (
         layer.type === 'particles'
           ? <ParticleCloud key={layer.id} layer={layer} />
+          : layer.type === 'wave_sphere'
+          ? <WaveSphere key={layer.id} layer={layer} />
           : <SceneObjectMemo key={layer.id} layer={layer} />
       ))}
       {selectedMesh && !viewerMode && transformMode !== 'select' && (

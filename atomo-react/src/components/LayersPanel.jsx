@@ -9,6 +9,7 @@ const SHAPES = [
   { id: 'cone', label: 'Cone', icon: null },
   { id: 'icosahedron', label: 'Icosahedron', icon: null },
   { id: 'plane', label: 'Plane', icon: PlaneIcon },
+  { id: 'wave_sphere', label: 'Wave Cloud', icon: null },
   { id: 'torus', label: 'Orbital S', icon: TorusIcon },
   { id: 'orbital_p', label: 'Orbital P', icon: null },
   { id: 'orbital_d', label: 'Orbital D', icon: null },
@@ -68,17 +69,22 @@ function ObjectsTab() {
   const addObject = (shape) => {
     const r = range
     const isOrbital = shape === 'torus' || shape.startsWith('orbital_')
+    const isWave = shape === 'wave_sphere'
     addLayer({
       id: crypto.randomUUID(),
       name: label || `${shape}_${incrementCounter()}`,
       type: shape, color,
-      position: isOrbital ? [0, 0, 0] : [(Math.random() - 0.5) * r * 2, (Math.random() - 0.5) * r * 2, (Math.random() - 0.5) * r * 2],
+      position: (isOrbital || isWave) ? [0, 0, 0] : [(Math.random() - 0.5) * r * 2, (Math.random() - 0.5) * r * 2, (Math.random() - 0.5) * r * 2],
       rotation: [0, 0, 0], scale: [1, 1, 1],
-      visible: true, opacity: isOrbital ? 0.7 : 1,
+      visible: true, opacity: isOrbital ? 0.7 : isWave ? 0.35 : 1,
       sphereRadius: size,
-      torusRadius: isOrbital ? size : undefined,
+      torusRadius: (isOrbital || isWave) ? size : undefined,
       tubeThickness: isOrbital ? 0.015 : undefined,
       pathOffset: 0,
+      waveAmplitude: isWave ? 0.15 : undefined,
+      waveFrequency: isWave ? 3 : undefined,
+      waveSpeed: isWave ? 1 : undefined,
+      waveWireframe: false,
       label,
     })
   }

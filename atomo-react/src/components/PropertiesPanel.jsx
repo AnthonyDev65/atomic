@@ -62,6 +62,28 @@ export default function PropertiesPanel() {
           />
         </Section>
 
+        {/* Wave Sphere */}
+        {layer.type === 'wave_sphere' && (
+          <Section title="Wave Cloud">
+            <PropRow label="Radius">
+              <DragInput label="R" value={layer.torusRadius || 1} onChange={(v) => update('torusRadius', v)} step={0.1} min={0.1} color="#4af" />
+            </PropRow>
+            <PropRow label="Amplitude">
+              <DragInput label="A" value={layer.waveAmplitude || 0.15} onChange={(v) => update('waveAmplitude', v)} step={0.01} min={0} color="#4af" />
+            </PropRow>
+            <PropRow label="Frequency">
+              <DragInput label="F" value={layer.waveFrequency || 3} onChange={(v) => update('waveFrequency', v)} step={0.5} min={0.5} color="#4af" />
+            </PropRow>
+            <PropRow label="Speed">
+              <DragInput label="V" value={layer.waveSpeed || 1} onChange={(v) => update('waveSpeed', v)} step={0.1} min={0} color="#4af" />
+            </PropRow>
+            <PropRow label="Wireframe">
+              <input type="checkbox" checked={layer.waveWireframe || false} onChange={(e) => update('waveWireframe', e.target.checked)}
+                className="w-3.5 h-3.5 accent-[#4c8bf5] cursor-pointer" />
+            </PropRow>
+          </Section>
+        )}
+
         {/* Torus-specific */}
         {(layer.type === 'torus' || layer.type === 'orbital_p' || layer.type === 'orbital_d' || layer.type === 'orbital_f') && (
           <Section title={layer.type === 'torus' ? 'Orbital S' : layer.type.replace('orbital_', 'Orbital ').toUpperCase()}>
