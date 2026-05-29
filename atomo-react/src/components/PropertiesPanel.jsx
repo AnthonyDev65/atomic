@@ -39,6 +39,15 @@ export default function PropertiesPanel() {
           <PropRow label="Opacity">
             <DragInput label="O" value={layer.opacity ?? 1} onChange={(v) => update('opacity', Math.max(0, Math.min(1, v)))} step={0.01} min={0} color="#888" />
           </PropRow>
+          <PropRow label="Points">
+            <input type="checkbox" checked={layer.pointCloud || false} onChange={(e) => update('pointCloud', e.target.checked)}
+              className="w-3.5 h-3.5 accent-[#4c8bf5] cursor-pointer" />
+          </PropRow>
+          {layer.pointCloud && (
+            <PropRow label="Point size">
+              <DragInput label="S" value={layer.pointSize || 0.03} onChange={(v) => update('pointSize', v)} step={0.005} min={0.001} color="#4af" />
+            </PropRow>
+          )}
         </Section>
 
         {/* Transform */}
@@ -77,6 +86,18 @@ export default function PropertiesPanel() {
             <PropRow label="Wireframe">
               <input type="checkbox" checked={layer.waveWireframe || false} onChange={(e) => update('waveWireframe', e.target.checked)}
                 className="w-3.5 h-3.5 accent-[#4c8bf5] cursor-pointer" />
+            </PropRow>
+            <PropRow label="Points">
+              <input type="checkbox" checked={layer.wavePoints || false} onChange={(e) => update('wavePoints', e.target.checked)}
+                className="w-3.5 h-3.5 accent-[#4c8bf5] cursor-pointer" />
+            </PropRow>
+            {layer.wavePoints && (
+              <PropRow label="Point size">
+                <DragInput label="S" value={layer.wavePointSize || 0.03} onChange={(v) => update('wavePointSize', v)} step={0.005} min={0.001} color="#4af" />
+              </PropRow>
+            )}
+            <PropRow label="Density">
+              <DragInput label="D" value={layer.waveDensity || 64} onChange={(v) => update('waveDensity', Math.max(8, Math.round(v)))} step={8} min={8} color="#4af" />
             </PropRow>
           </Section>
         )}

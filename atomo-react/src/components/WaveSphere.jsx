@@ -1,12 +1,23 @@
-import { useRef, useMemo } from 'react'
+import { useRef, useMemo, useEffect } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useStore } from '../store/useStore'
+import { meshRegistry } from './SceneContent'
 
-/**
- * Animated wave sphere — a sphere with undulating surface like an electron cloud.
- * The vertices oscillate with noise creating a fluid/water-like effect.
- */
+// Circular texture for round points
+const pointTexture = (() => {
+  const canvas = document.createElement('canvas')
+  canvas.width = 64; canvas.height = 64
+  const ctx = canvas.getContext('2d')
+  const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32)
+  g.addColorStop(0, 'rgba(255,255,255,1)')
+  g.addColorStop(0.4, 'rgba(255,255,255,0.9)')
+  g.addColorStop(1, 'rgba(255,255,255,0)')
+  ctx.fillStyle = g
+  ctx.fillRect(0, 0, 64, 64)
+  return new THREE.CanvasTexture(canvas)
+})()
+
 export default function WaveSphere({ layer }) {
   const meshRef = useRef()
   const setSelected = useStore(s => s.setSelected)
@@ -16,15 +27,22 @@ export default function WaveSphere({ layer }) {
   const isSelected = useStore(s => s.selectedIds).includes(layer.id)
   const timeRef = useRef(0)
 
+  // Register for gizmo support
+  useEffect(() => {
+    if (meshRef.current) meshRegistry.set(layer.id, meshRef.current)
+    return () => meshRegistry.delete(layer.id)
+  }, [layer.id])
+
+  const density = layer.waveDensity || 64
+
   const { basePositions, geometry } = useMemo(() => {
     const radius = layer.torusRadius || layer.sphereRadius || 1
-    const detail = 64
-    const geo = new THREE.SphereGeometry(radius, detail, detail)
+    const geo = new THREE.SphereGeometry(radius, density, density)
     const pos = geo.getAttribute('position')
     const base = new Float32Array(pos.array.length)
     base.set(pos.array)
     return { basePositions: base, geometry: geo }
-  }, [layer.torusRadius, layer.sphereRadius])
+  }, [layer.torusRadius, layer.sphereRadius, density])
 
   const color = useMemo(() => new THREE.Color(layer.color), [layer.color])
 
@@ -34,35 +52,21 @@ export default function WaveSphere({ layer }) {
     const t = timeRef.current
     const amplitude = layer.waveAmplitude || 0.15
     const frequency = layer.waveFrequency || 3
-
     const pos = meshRef.current.geometry.getAttribute('position')
     const arr = pos.array
-
     for (let i = 0; i < arr.length; i += 3) {
-      const bx = basePositions[i]
-      const by = basePositions[i + 1]
-      const bz = basePositions[i + 2]
-
-      // Spherical coordinates for noise
+      const bx = basePositions[i], by = basePositions[i + 1], bz = basePositions[i + 2]
       const r = Math.sqrt(bx * bx + by * by + bz * bz)
       const theta = Math.atan2(bz, bx)
       const phi = Math.acos(by / (r || 1))
-
-      // Multi-octave wave displacement
       const wave1 = Math.sin(theta * frequency + t * 2) * Math.cos(phi * frequency * 0.7 + t * 1.3)
       const wave2 = Math.sin(theta * frequency * 1.5 + t * 0.8 + 1.5) * Math.sin(phi * frequency * 1.2 + t * 1.7)
       const wave3 = Math.cos(theta * frequency * 0.5 + t * 2.5) * Math.sin(phi * frequency * 2 + t * 0.5)
-
-      const displacement = (wave1 * 0.5 + wave2 * 0.3 + wave3 * 0.2) * amplitude
-      const scale = 1 + displacement
-
-      arr[i] = bx * scale
-      arr[i + 1] = by * scale
-      arr[i + 2] = bz * scale
+      const scale = 1 + (wave1 * 0.5 + wave2 * 0.3 + wave3 * 0.2) * amplitude
+      arr[i] = bx * scale; arr[i + 1] = by * scale; arr[i + 2] = bz * scale
     }
-
     pos.needsUpdate = true
-    meshRef.current.geometry.computeVertexNormals()
+    if (!layer.wavePoints) meshRef.current.geometry.computeVertexNormals()
   })
 
   const handleClick = (e) => {
@@ -78,28 +82,35 @@ export default function WaveSphere({ layer }) {
 
   return (
     <group>
-      <mesh
-        ref={meshRef}
-        position={pos}
-        rotation={rot}
-        scale={scl}
-        onClick={handleClick}
-        visible={layer.visible !== false}
-        geometry={geometry}
-      >
-        <meshStandardMaterial
-          color={color}
-          emissive={color}
-          emissiveIntensity={emissiveIntensity}
-          roughness={0.2}
-          metalness={0.1}
-          transparent
-          opacity={layer.opacity ?? 0.4}
-          side={THREE.DoubleSide}
-          depthWrite={false}
-          wireframe={layer.waveWireframe || false}
-        />
-      </mesh>
+      {layer.wavePoints ? (
+        <points ref={meshRef} position={pos} rotation={rot} scale={scl} onClick={handleClick} visible={layer.visible !== false} geometry={geometry}>
+          <pointsMaterial
+            color={color}
+            size={layer.wavePointSize || 0.03}
+            map={pointTexture}
+            transparent
+            opacity={layer.opacity ?? 0.8}
+            depthWrite={false}
+            sizeAttenuation
+            alphaTest={0.01}
+          />
+        </points>
+      ) : (
+        <mesh ref={meshRef} position={pos} rotation={rot} scale={scl} onClick={handleClick} visible={layer.visible !== false} geometry={geometry}>
+          <meshStandardMaterial
+            color={color}
+            emissive={color}
+            emissiveIntensity={emissiveIntensity}
+            roughness={0.2}
+            metalness={0.1}
+            transparent
+            opacity={layer.opacity ?? 0.4}
+            side={THREE.DoubleSide}
+            depthWrite={false}
+            wireframe={layer.waveWireframe || false}
+          />
+        </mesh>
+      )}
       {isSelected && layer.visible !== false && (
         <mesh position={pos} rotation={rot} scale={scl}>
           <sphereGeometry args={[layer.torusRadius || layer.sphereRadius || 1, 32, 32]} />

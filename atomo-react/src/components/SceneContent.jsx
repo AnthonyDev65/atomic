@@ -5,10 +5,24 @@ import { useStore } from '../store/useStore'
 import ParticleCloud from './ParticleCloud'
 import WaveSphere from './WaveSphere'
 import { PorbitalGeometry, DorbitalGeometry, ForbitalGeometry, getOrbitalPoint } from './OrbitalGeometry'
+
+// Circular texture for round points
+const circleTexture = (() => {
+  const canvas = document.createElement('canvas')
+  canvas.width = 64; canvas.height = 64
+  const ctx = canvas.getContext('2d')
+  const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32)
+  g.addColorStop(0, 'rgba(255,255,255,1)')
+  g.addColorStop(0.4, 'rgba(255,255,255,0.9)')
+  g.addColorStop(1, 'rgba(255,255,255,0)')
+  ctx.fillStyle = g
+  ctx.fillRect(0, 0, 64, 64)
+  return new THREE.CanvasTexture(canvas)
+})()
 import * as THREE from 'three'
 
-// Registry to store mesh refs by layer id
-const meshRegistry = new Map()
+// Registry to store mesh refs by layer id — exported for WaveSphere
+export const meshRegistry = new Map()
 
 export default function SceneContent({ orbitRef }) {
   const layers = useStore(s => s.layers)
@@ -242,14 +256,21 @@ function SceneObject({ layer }) {
 
   return (
     <group>
-      <mesh ref={meshRef} position={pos} rotation={rot} scale={scl} onClick={handleClick} visible={layer.visible !== false}>
-        <GeometryMemo layer={layer} />
-        {labelTexture ? (
-          <meshStandardMaterial map={labelTexture} emissive={color} emissiveIntensity={emissiveIntensity * 0.8} roughness={0.5} metalness={0} transparent opacity={layer.opacity ?? 1} depthWrite={(layer.opacity ?? 1) >= 1} />
-        ) : (
-          <meshStandardMaterial color={color} emissive={color} emissiveIntensity={emissiveIntensity} roughness={0.3} metalness={0.1} transparent opacity={layer.opacity ?? 1} depthWrite={(layer.opacity ?? 1) >= 1} />
-        )}
-      </mesh>
+      {layer.pointCloud ? (
+        <points position={pos} rotation={rot} scale={scl} onClick={handleClick} visible={layer.visible !== false}>
+          <GeometryMemo layer={layer} />
+          <pointsMaterial color={color} size={layer.pointSize || 0.03} map={circleTexture} transparent opacity={layer.opacity ?? 0.9} depthWrite={false} sizeAttenuation alphaTest={0.01} />
+        </points>
+      ) : (
+        <mesh ref={meshRef} position={pos} rotation={rot} scale={scl} onClick={handleClick} visible={layer.visible !== false}>
+          <GeometryMemo layer={layer} />
+          {labelTexture ? (
+            <meshStandardMaterial map={labelTexture} emissive={color} emissiveIntensity={emissiveIntensity * 0.8} roughness={0.5} metalness={0} transparent opacity={layer.opacity ?? 1} depthWrite={(layer.opacity ?? 1) >= 1} />
+          ) : (
+            <meshStandardMaterial color={color} emissive={color} emissiveIntensity={emissiveIntensity} roughness={0.3} metalness={0.1} transparent opacity={layer.opacity ?? 1} depthWrite={(layer.opacity ?? 1) >= 1} />
+          )}
+        </mesh>
+      )}
       {isSelected && layer.visible !== false && (
         <mesh position={pos} rotation={rot} scale={scl}>
           <GeometryMemo layer={layer} />
