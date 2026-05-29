@@ -83,7 +83,7 @@ export default function WaveSphere({ layer }) {
   return (
     <group>
       {layer.wavePoints ? (
-        <points ref={meshRef} position={pos} rotation={rot} scale={scl} onClick={handleClick} visible={layer.visible !== false} geometry={geometry}>
+        <points ref={meshRef} position={pos} rotation={rot} scale={scl} onClick={handleClick} visible={layer.visible !== false} geometry={geometry} renderOrder={2}>
           <pointsMaterial
             color={color}
             size={layer.wavePointSize || 0.03}
@@ -96,7 +96,7 @@ export default function WaveSphere({ layer }) {
           />
         </points>
       ) : (
-        <mesh ref={meshRef} position={pos} rotation={rot} scale={scl} onClick={handleClick} visible={layer.visible !== false} geometry={geometry}>
+        <mesh ref={meshRef} position={pos} rotation={rot} scale={scl} onClick={handleClick} visible={layer.visible !== false} geometry={geometry} renderOrder={1}>
           <meshStandardMaterial
             color={color}
             emissive={color}

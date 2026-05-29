@@ -269,12 +269,12 @@ function SceneObject({ layer }) {
   return (
     <group>
       {layer.pointCloud ? (
-        <points position={pos} rotation={rot} scale={scl} onClick={handleClick} visible={layer.visible !== false}>
+        <points position={pos} rotation={rot} scale={scl} onClick={handleClick} visible={layer.visible !== false} renderOrder={2}>
           {orbitalPointGeo ? <primitive object={orbitalPointGeo} attach="geometry" /> : <GeometryMemo layer={layer} />}
           <pointsMaterial color={color} size={layer.pointSize || 0.03} map={circleTexture} transparent opacity={layer.opacity ?? 0.9} depthWrite={false} sizeAttenuation alphaTest={0.01} />
         </points>
       ) : (
-        <mesh ref={meshRef} position={pos} rotation={rot} scale={scl} onClick={handleClick} visible={layer.visible !== false}>
+        <mesh ref={meshRef} position={pos} rotation={rot} scale={scl} onClick={handleClick} visible={layer.visible !== false} renderOrder={(layer.opacity ?? 1) < 1 ? 1 : 0}>
           <GeometryMemo layer={layer} />
           {labelTexture ? (
             <meshStandardMaterial map={labelTexture} emissive={color} emissiveIntensity={emissiveIntensity * 0.8} roughness={0.5} metalness={0} transparent opacity={layer.opacity ?? 1} depthWrite={(layer.opacity ?? 1) >= 1} />
