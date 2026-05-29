@@ -48,6 +48,11 @@ export default function PropertiesPanel() {
               <DragInput label="S" value={layer.pointSize || 0.03} onChange={(v) => update('pointSize', v)} step={0.005} min={0.001} color="#4af" />
             </PropRow>
           )}
+          {layer.pointCloud && ['torus','orbital_p','orbital_d','orbital_f'].includes(layer.type) && (
+            <PropRow label="Density">
+              <DragInput label="N" value={layer.pointDensity || 3000} onChange={(v) => update('pointDensity', Math.max(100, Math.round(v)))} step={500} min={100} color="#4af" />
+            </PropRow>
+          )}
         </Section>
 
         {/* Transform */}

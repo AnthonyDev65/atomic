@@ -152,9 +152,60 @@ function createLobeGeometry(radius, lobes, type) {
 }
 
 /**
- * Get a point along the orbital path at parameter t (0-1).
- * Used for electron animation.
+ * Point cloud geometries for orbital shapes.
+ * Dense point distributions on the orbital surface.
  */
+function createOrbitalPointCloud(type, radius, count = 2000) {
+  const positions = []
+
+  for (let i = 0; i < count; i++) {
+    const theta = Math.random() * Math.PI * 2
+    const phi = Math.acos(2 * Math.random() - 1)
+    let r
+
+    if (type === 'torus') {
+      // Points on torus surface
+      const torusAngle = Math.random() * Math.PI * 2
+      const tubeAngle = Math.random() * Math.PI * 2
+      const tubeR = radius * 0.08
+      const x = (radius + tubeR * Math.cos(tubeAngle)) * Math.cos(torusAngle)
+      const y = tubeR * Math.sin(tubeAngle)
+      const z = (radius + tubeR * Math.cos(tubeAngle)) * Math.sin(torusAngle)
+      positions.push(x, y, z)
+      continue
+    } else if (type === 'orbital_p') {
+      // P: two lobes along Y
+      r = radius * Math.pow(Math.abs(Math.cos(phi)), 0.6) * 0.9
+      const x = r * Math.sin(phi) * Math.cos(theta) * 0.55
+      const y = radius * Math.cos(phi) * Math.pow(Math.abs(Math.cos(phi)), 0.3)
+      const z = r * Math.sin(phi) * Math.sin(theta) * 0.55
+      positions.push(x, y, z)
+      continue
+    } else if (type === 'orbital_d') {
+      // D: four lobes in XZ plane
+      r = radius * Math.pow(Math.abs(Math.sin(2 * phi) * Math.cos(2 * theta)), 0.5) * 0.85
+      r = Math.max(r, radius * 0.02)
+      positions.push(r * Math.sin(phi) * Math.cos(theta), r * Math.cos(phi) * 0.4, r * Math.sin(phi) * Math.sin(theta))
+      continue
+    } else if (type === 'orbital_f') {
+      // F: six lobes
+      const val = Math.abs(Math.sin(phi) * Math.sin(phi) * Math.cos(3 * theta)) * 0.6 +
+                  Math.abs(Math.cos(phi) * Math.sin(2 * phi)) * 0.4
+      r = radius * Math.pow(val, 0.4) * 0.85
+      r = Math.max(r, radius * 0.02)
+      positions.push(r * Math.sin(phi) * Math.cos(theta), r * Math.cos(phi), r * Math.sin(phi) * Math.sin(theta))
+      continue
+    }
+    positions.push(0, 0, 0)
+  }
+
+  const geo = new THREE.BufferGeometry()
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  return geo
+}
+
+export { createOrbitalPointCloud }
+
 export function getOrbitalPoint(type, t, radius) {
   const angle = t * Math.PI * 2
   switch (type) {

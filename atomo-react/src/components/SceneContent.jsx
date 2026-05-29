@@ -5,7 +5,7 @@ import { useStore } from '../store/useStore'
 import ParticleCloud from './ParticleCloud'
 import WaveSphere from './WaveSphere'
 import Label3D from './Label3D'
-import { PorbitalGeometry, DorbitalGeometry, ForbitalGeometry, getOrbitalPoint } from './OrbitalGeometry'
+import { PorbitalGeometry, DorbitalGeometry, ForbitalGeometry, getOrbitalPoint, createOrbitalPointCloud } from './OrbitalGeometry'
 
 // Circular texture for round points
 const circleTexture = (() => {
@@ -201,6 +201,15 @@ function SceneObject({ layer }) {
   const addToSelection = useStore(s => s.addToSelection)
   const emissiveIntensity = useStore(s => s.emissiveIntensity)
 
+  // For orbital types in pointCloud mode, use dense point distribution
+  const isOrbitalType = ['torus', 'orbital_p', 'orbital_d', 'orbital_f'].includes(layer.type)
+  const orbitalPointGeo = useMemo(() => {
+    if (!layer.pointCloud || !isOrbitalType) return null
+    const radius = layer.torusRadius || 0.5
+    const count = layer.pointDensity || 3000
+    return createOrbitalPointCloud(layer.type, radius, count)
+  }, [layer.pointCloud, layer.type, layer.torusRadius, layer.pointDensity, isOrbitalType])
+
   const handleClick = (e) => {
     if (viewerMode) return
     e.stopPropagation()
@@ -261,7 +270,7 @@ function SceneObject({ layer }) {
     <group>
       {layer.pointCloud ? (
         <points position={pos} rotation={rot} scale={scl} onClick={handleClick} visible={layer.visible !== false}>
-          <GeometryMemo layer={layer} />
+          {orbitalPointGeo ? <primitive object={orbitalPointGeo} attach="geometry" /> : <GeometryMemo layer={layer} />}
           <pointsMaterial color={color} size={layer.pointSize || 0.03} map={circleTexture} transparent opacity={layer.opacity ?? 0.9} depthWrite={false} sizeAttenuation alphaTest={0.01} />
         </points>
       ) : (
