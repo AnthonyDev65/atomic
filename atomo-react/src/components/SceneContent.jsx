@@ -4,6 +4,7 @@ import { TransformControls } from '@react-three/drei'
 import { useStore } from '../store/useStore'
 import ParticleCloud from './ParticleCloud'
 import WaveSphere from './WaveSphere'
+import Label3D from './Label3D'
 import { PorbitalGeometry, DorbitalGeometry, ForbitalGeometry, getOrbitalPoint } from './OrbitalGeometry'
 
 // Circular texture for round points
@@ -51,6 +52,8 @@ export default function SceneContent({ orbitRef }) {
           ? <ParticleCloud key={layer.id} layer={layer} />
           : layer.type === 'wave_sphere'
           ? <WaveSphere key={layer.id} layer={layer} />
+          : layer.type === 'label3d'
+          ? <Label3D key={layer.id} layer={layer} />
           : <SceneObjectMemo key={layer.id} layer={layer} />
       ))}
       {selectedMesh && !viewerMode && transformMode !== 'select' && (

@@ -102,6 +102,28 @@ export default function PropertiesPanel() {
           </Section>
         )}
 
+        {/* Add label to this object */}
+        {layer.type !== 'label3d' && (
+          <Section title="Annotation">
+            <AddLabelToObject layer={layer} />
+          </Section>
+        )}
+
+        {/* Label 3D */}
+        {layer.type === 'label3d' && (
+          <Section title="Label">
+            <PropRow label="Text">
+              <input type="text" value={layer.labelText || ''} onChange={(e) => update('labelText', e.target.value)}
+                className="flex-1 px-2 py-1 bg-[#1e1e1e] border border-[#3d3d3d] rounded text-white text-[10px] outline-none focus:border-[#4c8bf5]/60" />
+            </PropRow>
+            <PropRow label="Line color">
+              <input type="color" value={layer.labelLineColor || layer.color || '#ffffff'} onChange={(e) => update('labelLineColor', e.target.value)}
+                className="w-6 h-4 rounded cursor-pointer bg-transparent border border-[#3d3d3d]" />
+            </PropRow>
+            <p className="text-[9px] text-[#555] mt-1">Move the label with the gizmo. The line connects origin to label position.</p>
+          </Section>
+        )}
+
         {/* Torus-specific */}
         {(layer.type === 'torus' || layer.type === 'orbital_p' || layer.type === 'orbital_d' || layer.type === 'orbital_f') && (
           <Section title={layer.type === 'torus' ? 'Orbital S' : layer.type.replace('orbital_', 'Orbital ').toUpperCase()}>
@@ -152,6 +174,43 @@ function PropRow({ label, children }) {
     <div className="flex items-center justify-between mb-1.5">
       <span className="text-[11px] text-[#999]">{label}</span>
       <div className="flex items-center gap-1.5">{children}</div>
+    </div>
+  )
+}
+
+function AddLabelToObject({ layer }) {
+  const { addLayer, incrementCounter } = useStore()
+  const [text, setText] = useState(layer.name || 'Label')
+
+  const create = () => {
+    const from = layer.position || [0, 0, 0]
+    const offset = 2.5
+    addLayer({
+      id: crypto.randomUUID(),
+      name: `label_${incrementCounter()}`,
+      type: 'label3d',
+      color: layer.color || '#ffffff',
+      labelLineColor: layer.color || '#88aaff',
+      labelText: text,
+      labelFrom: [...from],
+      position: [from[0] + offset, from[1] + offset, from[2]],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+      visible: true,
+      opacity: 1,
+    })
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <PropRow label="Text">
+        <input type="text" value={text} onChange={(e) => setText(e.target.value)}
+          className="flex-1 px-2 py-1 bg-[#1e1e1e] border border-[#3d3d3d] rounded text-white text-[10px] outline-none focus:border-[#4c8bf5]/60" />
+      </PropRow>
+      <button onClick={create}
+        className="w-full py-1.5 rounded bg-[#1a2a3a] border border-[#2a4a6a] text-[#6af] text-[10px] font-medium hover:bg-[#203050] transition">
+        Add label line
+      </button>
     </div>
   )
 }
