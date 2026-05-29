@@ -198,6 +198,7 @@ function AddLabelToObject({ layer }) {
       labelLineColor: layer.color || '#88aaff',
       labelText: text,
       labelFrom: [...from],
+      labelParentId: layer.id,
       position: [from[0] + offset, from[1] + offset, from[2]],
       rotation: [0, 0, 0],
       scale: [1, 1, 1],

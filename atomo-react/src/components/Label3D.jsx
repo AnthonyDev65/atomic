@@ -10,8 +10,11 @@ export default function Label3D({ layer }) {
   const addToSelection = useStore(s => s.addToSelection)
   const viewerMode = useStore(s => s.viewerMode)
   const isSelected = useStore(s => s.selectedIds).includes(layer.id)
+  const layers = useStore(s => s.layers)
 
-  const from = layer.labelFrom || [0, 0, 0]
+  // Get parent position dynamically
+  const parent = layer.labelParentId ? layers.find(l => l.id === layer.labelParentId) : null
+  const from = parent ? (parent.position || [0, 0, 0]) : (layer.labelFrom || [0, 0, 0])
   const to = layer.position || [2, 2, 0]
   const text = layer.labelText || 'Label'
   const color = layer.color || '#ffffff'
