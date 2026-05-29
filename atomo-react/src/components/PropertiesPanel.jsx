@@ -61,7 +61,12 @@ export default function PropertiesPanel() {
         </Section>
 
         <Section title="Scale">
-          <Vec3Input values={scale} onChange={(v) => update('scale', v)} step={0.1} min={0.01} uniform />
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[9px] text-[#666]">Uniform</span>
+            <input type="checkbox" checked={layer.uniformScale !== false} onChange={(e) => update('uniformScale', e.target.checked)}
+              className="w-3 h-3 accent-[#4c8bf5] cursor-pointer" />
+          </div>
+          <Vec3Input values={scale} onChange={(v) => update('scale', v)} step={0.1} min={0.01} uniform={layer.uniformScale !== false} />
         </Section>
 
         <Section title="Rotation">
