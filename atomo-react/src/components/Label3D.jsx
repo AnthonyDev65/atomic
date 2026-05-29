@@ -12,10 +12,22 @@ export default function Label3D({ layer }) {
   const isSelected = useStore(s => s.selectedIds).includes(layer.id)
   const layers = useStore(s => s.layers)
 
-  // Get parent position dynamically
+  // Get parent position dynamically and calculate surface point
   const parent = layer.labelParentId ? layers.find(l => l.id === layer.labelParentId) : null
-  const from = parent ? (parent.position || [0, 0, 0]) : (layer.labelFrom || [0, 0, 0])
+  const parentPos = parent ? (parent.position || [0, 0, 0]) : (layer.labelFrom || [0, 0, 0])
   const to = layer.position || [2, 2, 0]
+
+  // Calculate line start on the surface of the parent object
+  const parentRadius = layer.labelParentRadius || 0.5
+  const dx = to[0] - parentPos[0]
+  const dy = to[1] - parentPos[1]
+  const dz = to[2] - parentPos[2]
+  const dist = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1
+  const from = [
+    parentPos[0] + (dx / dist) * parentRadius,
+    parentPos[1] + (dy / dist) * parentRadius,
+    parentPos[2] + (dz / dist) * parentRadius,
+  ]
   const text = layer.labelText || 'Label'
   const color = layer.color || '#ffffff'
   const lineColor = layer.labelLineColor || color

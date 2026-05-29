@@ -190,6 +190,24 @@ function AddLabelToObject({ layer }) {
   const create = () => {
     const from = layer.position || [0, 0, 0]
     const offset = 2.5
+    const labelPos = [from[0] + offset, from[1] + offset, from[2]]
+
+    // Calculate a point on the surface of the object (towards the label)
+    const radius = layer.torusRadius || layer.sphereRadius || 0.5
+    const scale = layer.scale || [1, 1, 1]
+    const effectiveRadius = radius * Math.max(scale[0], scale[1], scale[2])
+    // Direction from center to label
+    const dx = labelPos[0] - from[0]
+    const dy = labelPos[1] - from[1]
+    const dz = labelPos[2] - from[2]
+    const dist = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1
+    // Start point on the surface
+    const surfacePoint = [
+      from[0] + (dx / dist) * effectiveRadius,
+      from[1] + (dy / dist) * effectiveRadius,
+      from[2] + (dz / dist) * effectiveRadius,
+    ]
+
     addLayer({
       id: crypto.randomUUID(),
       name: `label_${incrementCounter()}`,
@@ -197,9 +215,10 @@ function AddLabelToObject({ layer }) {
       color: layer.color || '#ffffff',
       labelLineColor: layer.color || '#88aaff',
       labelText: text,
-      labelFrom: [...from],
+      labelFrom: surfacePoint,
       labelParentId: layer.id,
-      position: [from[0] + offset, from[1] + offset, from[2]],
+      labelParentRadius: effectiveRadius,
+      position: labelPos,
       rotation: [0, 0, 0],
       scale: [1, 1, 1],
       visible: true,
