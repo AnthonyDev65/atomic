@@ -24,12 +24,18 @@ export default function App() {
   // Load shared model from URL on mount
   useEffect(() => {
     const loadShared = () => {
-      const params = new URLSearchParams(window.location.search)
-      const viewParam = params.get('view')
+      // Check hash fragment first (new format), then query params (legacy)
+      let viewParam = null
+      const hash = window.location.hash
+      if (hash.startsWith('#view=')) {
+        viewParam = hash.slice(6)
+      } else {
+        const params = new URLSearchParams(window.location.search)
+        viewParam = params.get('view')
+      }
       if (!viewParam) return
 
       try {
-        // Try decoding - handle both encoded and raw formats
         let json = decompressFromEncodedURIComponent(viewParam)
         if (!json) json = decompressFromEncodedURIComponent(decodeURIComponent(viewParam))
         if (!json) { console.error('Failed to decompress'); return }
@@ -44,13 +50,13 @@ export default function App() {
           }
           if (data.graphics) Object.assign(state, data.graphics)
           useStore.setState(state)
+          // Clean URL
           window.history.replaceState({}, '', window.location.pathname)
         }
       } catch (e) { console.error('Failed to load shared model:', e) }
     }
 
-    // Small delay to ensure everything is mounted
-    setTimeout(loadShared, 100)
+    setTimeout(loadShared, 150)
   }, [])
 
   useEffect(() => {

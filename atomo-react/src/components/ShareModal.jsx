@@ -13,10 +13,10 @@ export default function ShareModal({ onClose }) {
       graphics: { quality, bloomStrength, bloomRadius, bloomThreshold, emissiveIntensity, exposure, bgColor }
     }
     const compressed = compressToEncodedURIComponent(JSON.stringify(data))
-    const url = `${window.location.origin}${window.location.pathname}?view=${compressed}`
+    // Use hash fragment instead of query param — more reliable across browsers/apps
+    const url = `${window.location.origin}${window.location.pathname}#view=${compressed}`
 
-    if (url.length > 8000) {
-      // Too large for URL — warn user
+    if (url.length > 15000) {
       setLink('MODEL_TOO_LARGE')
     } else {
       setLink(url)
