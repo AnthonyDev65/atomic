@@ -4,19 +4,22 @@ import * as THREE from 'three'
 import { useStore } from '../store/useStore'
 import { meshRegistry } from './SceneContent'
 
-// Circular texture for round points
-const pointTexture = (() => {
+// Circular texture for round points (shared singleton)
+let _pointTexture = null
+function getPointTexture() {
+  if (_pointTexture) return _pointTexture
   const canvas = document.createElement('canvas')
-  canvas.width = 64; canvas.height = 64
+  canvas.width = 32; canvas.height = 32
   const ctx = canvas.getContext('2d')
-  const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32)
+  const g = ctx.createRadialGradient(16, 16, 0, 16, 16, 16)
   g.addColorStop(0, 'rgba(255,255,255,1)')
-  g.addColorStop(0.4, 'rgba(255,255,255,0.9)')
+  g.addColorStop(0.5, 'rgba(255,255,255,0.6)')
   g.addColorStop(1, 'rgba(255,255,255,0)')
   ctx.fillStyle = g
-  ctx.fillRect(0, 0, 64, 64)
-  return new THREE.CanvasTexture(canvas)
-})()
+  ctx.fillRect(0, 0, 32, 32)
+  _pointTexture = new THREE.CanvasTexture(canvas)
+  return _pointTexture
+}
 
 export default function WaveSphere({ layer }) {
   const meshRef = useRef()
@@ -26,47 +29,68 @@ export default function WaveSphere({ layer }) {
   const emissiveIntensity = useStore(s => s.emissiveIntensity)
   const isSelected = useStore(s => s.selectedIds).includes(layer.id)
   const timeRef = useRef(0)
+  const frameSkip = useRef(0)
 
-  // Register for gizmo support
   useEffect(() => {
     if (meshRef.current) meshRegistry.set(layer.id, meshRef.current)
     return () => meshRegistry.delete(layer.id)
   }, [layer.id])
 
-  const density = layer.waveDensity || 64
+  const density = layer.waveDensity || 48 // reduced default from 64
 
-  const { basePositions, geometry } = useMemo(() => {
+  const { basePositions, geometry, sphericalCoords } = useMemo(() => {
     const radius = layer.torusRadius || layer.sphereRadius || 1
     const geo = new THREE.SphereGeometry(radius, density, density)
     const pos = geo.getAttribute('position')
     const base = new Float32Array(pos.array.length)
     base.set(pos.array)
-    return { basePositions: base, geometry: geo }
+
+    // Pre-compute spherical coordinates (expensive trig done once)
+    const count = base.length / 3
+    const coords = new Float32Array(count * 2) // [theta, phi] pairs
+    for (let i = 0; i < count; i++) {
+      const bx = base[i * 3], by = base[i * 3 + 1], bz = base[i * 3 + 2]
+      coords[i * 2] = Math.atan2(bz, bx)     // theta
+      coords[i * 2 + 1] = Math.acos(by / (Math.sqrt(bx * bx + by * by + bz * bz) || 1)) // phi
+    }
+
+    return { basePositions: base, geometry: geo, sphericalCoords: coords }
   }, [layer.torusRadius, layer.sphereRadius, density])
 
   const color = useMemo(() => new THREE.Color(layer.color), [layer.color])
 
   useFrame((_, delta) => {
     if (!meshRef.current) return
-    timeRef.current += delta * (layer.waveSpeed || 1)
+
+    // Throttle: update every other frame for performance
+    frameSkip.current++
+    if (frameSkip.current % 2 !== 0) return
+
+    timeRef.current += delta * 2 * (layer.waveSpeed || 1)
     const t = timeRef.current
     const amplitude = layer.waveAmplitude || 0.15
     const frequency = layer.waveFrequency || 3
+
     const pos = meshRef.current.geometry.getAttribute('position')
     const arr = pos.array
-    for (let i = 0; i < arr.length; i += 3) {
-      const bx = basePositions[i], by = basePositions[i + 1], bz = basePositions[i + 2]
-      const r = Math.sqrt(bx * bx + by * by + bz * bz)
-      const theta = Math.atan2(bz, bx)
-      const phi = Math.acos(by / (r || 1))
-      const wave1 = Math.sin(theta * frequency + t * 2) * Math.cos(phi * frequency * 0.7 + t * 1.3)
-      const wave2 = Math.sin(theta * frequency * 1.5 + t * 0.8 + 1.5) * Math.sin(phi * frequency * 1.2 + t * 1.7)
-      const wave3 = Math.cos(theta * frequency * 0.5 + t * 2.5) * Math.sin(phi * frequency * 2 + t * 0.5)
-      const scale = 1 + (wave1 * 0.5 + wave2 * 0.3 + wave3 * 0.2) * amplitude
-      arr[i] = bx * scale; arr[i + 1] = by * scale; arr[i + 2] = bz * scale
+    const count = arr.length / 3
+
+    for (let i = 0; i < count; i++) {
+      const i3 = i * 3
+      const theta = sphericalCoords[i * 2]
+      const phi = sphericalCoords[i * 2 + 1]
+
+      // Simplified wave: single sin+cos combo (much faster than 3 separate waves)
+      const wave = Math.sin(theta * frequency + t) * Math.cos(phi * frequency * 0.7 + t * 1.3)
+      const scale = 1 + wave * amplitude
+
+      arr[i3] = basePositions[i3] * scale
+      arr[i3 + 1] = basePositions[i3 + 1] * scale
+      arr[i3 + 2] = basePositions[i3 + 2] * scale
     }
+
     pos.needsUpdate = true
-    if (!layer.wavePoints) meshRef.current.geometry.computeVertexNormals()
+    // Skip normal recomputation — it's very expensive and barely visible on transparent objects
   })
 
   const handleClick = (e) => {
@@ -87,7 +111,7 @@ export default function WaveSphere({ layer }) {
           <pointsMaterial
             color={color}
             size={layer.wavePointSize || 0.03}
-            map={pointTexture}
+            map={getPointTexture()}
             transparent
             opacity={layer.opacity ?? 0.8}
             depthWrite={false}
@@ -113,7 +137,7 @@ export default function WaveSphere({ layer }) {
       )}
       {isSelected && layer.visible !== false && (
         <mesh position={pos} rotation={rot} scale={scl}>
-          <sphereGeometry args={[layer.torusRadius || layer.sphereRadius || 1, 32, 32]} />
+          <sphereGeometry args={[layer.torusRadius || layer.sphereRadius || 1, 24, 24]} />
           <meshBasicMaterial color="#4c8bf5" wireframe transparent opacity={0.15} depthTest={false} />
         </mesh>
       )}
