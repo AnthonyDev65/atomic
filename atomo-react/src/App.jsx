@@ -23,12 +23,16 @@ export default function App() {
 
   // Load shared model from URL on mount
   useEffect(() => {
-    const loadShared = () => {
-      // Check hash fragment first (new format), then query params (legacy)
-      let viewParam = null
+    const loadShared = async () => {
       const hash = window.location.hash
+      let viewParam = null
+      let isCloudId = false
+
       if (hash.startsWith('#view=')) {
         viewParam = hash.slice(6)
+      } else if (hash.startsWith('#id=')) {
+        isCloudId = true
+        viewParam = hash.slice(4)
       } else {
         const params = new URLSearchParams(window.location.search)
         viewParam = params.get('view')
@@ -36,12 +40,20 @@ export default function App() {
       if (!viewParam) return
 
       try {
-        let json = decompressFromEncodedURIComponent(viewParam)
-        if (!json) json = decompressFromEncodedURIComponent(decodeURIComponent(viewParam))
-        if (!json) { console.error('Failed to decompress'); return }
+        let data
+        if (isCloudId) {
+          // Fetch from JSONBin
+          const res = await fetch(`https://api.jsonbin.io/v3/b/${viewParam}/latest`)
+          const json = await res.json()
+          data = json.record
+        } else {
+          let jsonStr = decompressFromEncodedURIComponent(viewParam)
+          if (!jsonStr) jsonStr = decompressFromEncodedURIComponent(decodeURIComponent(viewParam))
+          if (!jsonStr) { console.error('Failed to decompress'); return }
+          data = JSON.parse(jsonStr)
+        }
 
-        const data = JSON.parse(json)
-        if (data.layers) {
+        if (data?.layers) {
           const state = {
             layers: data.layers,
             groups: data.groups || [],
@@ -50,7 +62,6 @@ export default function App() {
           }
           if (data.graphics) Object.assign(state, data.graphics)
           useStore.setState(state)
-          // Clean URL
           window.history.replaceState({}, '', window.location.pathname)
         }
       } catch (e) { console.error('Failed to load shared model:', e) }
