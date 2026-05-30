@@ -42,10 +42,9 @@ export default function App() {
       try {
         let data
         if (isCloudId) {
-          // Fetch from JSONBin
-          const res = await fetch(`https://api.jsonbin.io/v3/b/${viewParam}/latest`)
-          const json = await res.json()
-          data = json.record
+          // Fetch from jsonblob.com
+          const res = await fetch(`https://jsonblob.com/api/jsonBlob/${viewParam}`)
+          data = await res.json()
         } else {
           let jsonStr = decompressFromEncodedURIComponent(viewParam)
           if (!jsonStr) jsonStr = decompressFromEncodedURIComponent(decodeURIComponent(viewParam))

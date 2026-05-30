@@ -2,8 +2,7 @@ import { useState } from 'react'
 import { useStore } from '../store/useStore'
 import { compressToEncodedURIComponent } from 'lz-string'
 
-const JSONBIN_API = 'https://api.jsonbin.io/v3/b'
-const JSONBIN_KEY = '$2a$10$placeholder' // Free tier — no key needed for public bins
+const JSONBLOB_API = 'https://jsonblob.com/api/jsonBlob'
 
 export default function ShareModal({ onClose }) {
   const { layers, groups, viewerData, quality, bloomStrength, bloomRadius, bloomThreshold, emissiveIntensity, exposure, bgColor } = useStore()
@@ -30,17 +29,15 @@ export default function ShareModal({ onClose }) {
   const generateCloud = async () => {
     setLoading(true)
     try {
-      const res = await fetch(JSONBIN_API, {
+      const res = await fetch(JSONBLOB_API, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Bin-Private': 'false',
-          'X-Bin-Name': 'atomo-model',
-        },
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
         body: JSON.stringify(data)
       })
-      const json = await res.json()
-      const id = json.metadata?.id
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      // jsonblob returns the ID in the Location header
+      const location = res.headers.get('Location')
+      const id = location?.split('/').pop()
       if (id) {
         const url = `${window.location.origin}${window.location.pathname}#id=${id}`
         setLink(url)
@@ -48,6 +45,7 @@ export default function ShareModal({ onClose }) {
         setLink('CLOUD_ERROR')
       }
     } catch (e) {
+      console.error('Cloud upload error:', e)
       setLink('CLOUD_ERROR')
     }
     setLoading(false)
