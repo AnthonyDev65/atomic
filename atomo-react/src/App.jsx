@@ -6,8 +6,10 @@ import ConfigPanel from './components/ConfigPanel'
 import ScriptConsole from './components/ScriptConsole'
 import ViewerSetup from './components/ViewerSetup'
 import ViewerHUD from './components/ViewerHUD'
+import ShareModal from './components/ShareModal'
 import { useStore } from './store/useStore'
 import { useEffect } from 'react'
+import { decompressFromEncodedURIComponent } from 'lz-string'
 
 export default function App() {
   const viewerMode = useStore(s => s.viewerMode)
@@ -16,6 +18,30 @@ export default function App() {
   const toggleScript = useStore(s => s.toggleScript)
   const selectedId = useStore(s => s.selectedId)
   const removeLayer = useStore(s => s.removeLayer)
+  const shareOpenStore = useStore(s => s.shareOpen)
+  const toggleShare = useStore(s => s.toggleShare)
+
+  // Load shared model from URL on mount
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const viewParam = params.get('view')
+    if (viewParam) {
+      try {
+        const json = decompressFromEncodedURIComponent(viewParam)
+        const data = JSON.parse(json)
+        if (data.layers) {
+          useStore.setState({
+            layers: data.layers,
+            groups: data.groups || [],
+            viewerData: data.viewer || useStore.getState().viewerData,
+            viewerMode: true,
+          })
+          // Clean URL
+          window.history.replaceState({}, '', window.location.pathname)
+        }
+      } catch (e) { console.error('Failed to load shared model:', e) }
+    }
+  }, [])
 
   useEffect(() => {
     const handleKey = (e) => {
@@ -66,6 +92,7 @@ export default function App() {
       <ScriptConsole />
       <ViewerSetup />
       <ViewerHUD />
+      {shareOpenStore && <ShareModal onClose={toggleShare} />}
 
       {!viewerMode && (
         <p className="absolute bottom-3 left-1/2 -translate-x-1/2 text-[#444] font-mono text-[10px] tracking-wider pointer-events-none select-none">

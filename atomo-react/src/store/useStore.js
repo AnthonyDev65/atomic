@@ -20,6 +20,7 @@ export const useStore = create((set, get) => ({
   scriptOpen: false,
   configOpen: false,
   viewerSetupOpen: false,
+  shareOpen: false,
 
   // Grid
   showGrid: true,
@@ -59,6 +60,7 @@ export const useStore = create((set, get) => ({
   toggleRightPanel: () => set((s) => ({ rightPanelOpen: !s.rightPanelOpen })),
   toggleScript: () => set((s) => ({ scriptOpen: !s.scriptOpen })),
   toggleConfig: () => set((s) => ({ configOpen: !s.configOpen })),
+  toggleShare: () => set((s) => ({ shareOpen: !s.shareOpen })),
   setQuality: (q) => {
     const presets = {
       low: { bloomStrength: 0.3, bloomRadius: 0.2, bloomThreshold: 0.6, emissiveIntensity: 0.1, exposure: 1.0 },
