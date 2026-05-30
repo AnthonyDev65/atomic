@@ -30,6 +30,9 @@ export const useStore = create((set, get) => ({
   gridSnap: 0.5,
   orbitalMode: 'simple', // 'simple' (wireframe paths) | 'full' (solid shapes)
   quality: 'medium',
+  isLowEnd: /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+    (navigator.hardwareConcurrency || 4) <= 2 ||
+    (navigator.deviceMemory || 4) <= 2,
   bloomStrength: 1.2,
   bloomRadius: 0.4,
   bloomThreshold: 0.1,

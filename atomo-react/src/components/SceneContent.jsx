@@ -297,19 +297,25 @@ const GeometryMemo = memo(function GeometryInner({ layer }) {
   const r = layer.sphereRadius || 0.5
   const tr = layer.torusRadius || 0.5
   const tt = layer.tubeThickness || 0.1
+  const quality = useStore(s => s.quality)
+  const isLowEnd = useStore(s => s.isLowEnd)
+  const effectiveQ = isLowEnd && quality === 'high' ? 'medium' : quality
+  const sSeg = effectiveQ === 'high' ? 64 : effectiveQ === 'medium' ? 24 : 8
+  const tSeg = effectiveQ === 'high' ? 128 : effectiveQ === 'medium' ? 48 : 16
+  const tRad = effectiveQ === 'high' ? 32 : effectiveQ === 'medium' ? 12 : 6
 
   switch (layer.type) {
-    case 'sphere': return <sphereGeometry args={[r, 32, 32]} />
+    case 'sphere': return <sphereGeometry args={[r, sSeg, sSeg]} />
     case 'box': return <boxGeometry args={[0.8, 0.8, 0.8]} />
-    case 'torus': return <torusGeometry args={[tr, tt, 16, 64]} />
-    case 'cylinder': return <cylinderGeometry args={[0.4, 0.4, 1, 32]} />
-    case 'cone': return <coneGeometry args={[0.5, 1, 32]} />
+    case 'torus': return <torusGeometry args={[tr, tt, tRad, tSeg]} />
+    case 'cylinder': return <cylinderGeometry args={[0.4, 0.4, 1, sSeg]} />
+    case 'cone': return <coneGeometry args={[0.5, 1, sSeg]} />
     case 'icosahedron': return <icosahedronGeometry args={[r]} />
     case 'plane': return <planeGeometry args={[1, 1]} />
     case 'orbital_p': return <PorbitalGeometry radius={tr || r} tubeRadius={tt || 0.02} />
     case 'orbital_d': return <DorbitalGeometry radius={tr || r} tubeRadius={tt || 0.02} />
     case 'orbital_f': return <ForbitalGeometry radius={tr || r} tubeRadius={tt || 0.02} />
-    default: return <sphereGeometry args={[r, 32, 32]} />
+    default: return <sphereGeometry args={[r, sSeg, sSeg]} />
   }
 }, (prev, next) => {
   return prev.layer.type === next.layer.type &&
