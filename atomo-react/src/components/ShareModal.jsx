@@ -2,14 +2,14 @@ import { useState } from 'react'
 import { useStore } from '../store/useStore'
 import { compressToEncodedURIComponent } from 'lz-string'
 
-const JSONBLOB_API = 'https://jsonblob.com/api/jsonBlob'
+const GIST_API = 'https://api.github.com/gists'
 
 export default function ShareModal({ onClose }) {
   const { layers, groups, viewerData, quality, bloomStrength, bloomRadius, bloomThreshold, emissiveIntensity, exposure, bgColor } = useStore()
   const [link, setLink] = useState('')
   const [copied, setCopied] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [method, setMethod] = useState('url') // 'url' | 'cloud'
+  const [method, setMethod] = useState('url')
 
   const data = {
     layers, groups, viewer: viewerData,
@@ -19,27 +19,27 @@ export default function ShareModal({ onClose }) {
   const generateURL = () => {
     const compressed = compressToEncodedURIComponent(JSON.stringify(data))
     const url = `${window.location.origin}${window.location.pathname}#view=${compressed}`
-    if (url.length > 15000) {
-      setLink('MODEL_TOO_LARGE')
-    } else {
-      setLink(url)
-    }
+    if (url.length > 15000) setLink('MODEL_TOO_LARGE')
+    else setLink(url)
   }
 
   const generateCloud = async () => {
     setLoading(true)
     try {
-      const res = await fetch(JSONBLOB_API, {
+      const res = await fetch(GIST_API, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-        body: JSON.stringify(data)
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/vnd.github+json' },
+        body: JSON.stringify({
+          description: 'Atomo Editor - Shared Model',
+          public: true,
+          files: { 'model.json': { content: JSON.stringify(data) } }
+        })
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      // jsonblob returns the ID in the Location header
-      const location = res.headers.get('Location')
-      const id = location?.split('/').pop()
-      if (id) {
-        const url = `${window.location.origin}${window.location.pathname}#id=${id}`
+      const json = await res.json()
+      const gistId = json.id
+      if (gistId) {
+        const url = `${window.location.origin}${window.location.pathname}#gist=${gistId}`
         setLink(url)
       } else {
         setLink('CLOUD_ERROR')

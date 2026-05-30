@@ -14,7 +14,8 @@ export default function Toolbar() {
   if (viewerMode) return null
 
   const exportProject = () => {
-    const data = { version: '2.0', app: 'atomo-react', created: new Date().toISOString(), layers, groups }
+    const viewerData = useStore.getState().viewerData
+    const data = { version: '2.0', app: 'atomo-react', created: new Date().toISOString(), layers, groups, viewer: viewerData }
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob); a.download = 'project.atomo'; a.click()
@@ -49,7 +50,11 @@ export default function Toolbar() {
         }
         if (!importedLayers) { alert('Invalid file format'); return }
         clearLayers()
-        useStore.setState({ layers: importedLayers, groups: data.groups || [] })
+        useStore.setState({
+          layers: importedLayers,
+          groups: data.groups || [],
+          ...(data.viewer ? { viewerData: data.viewer } : {})
+        })
       } catch (err) { alert('Error: ' + err.message) }
     }
     reader.readAsText(file)

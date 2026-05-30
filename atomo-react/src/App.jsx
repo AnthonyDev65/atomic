@@ -33,6 +33,9 @@ export default function App() {
       } else if (hash.startsWith('#id=')) {
         isCloudId = true
         viewParam = hash.slice(4)
+      } else if (hash.startsWith('#gist=')) {
+        isCloudId = true
+        viewParam = hash.slice(6)
       } else {
         const params = new URLSearchParams(window.location.search)
         viewParam = params.get('view')
@@ -42,9 +45,11 @@ export default function App() {
       try {
         let data
         if (isCloudId) {
-          // Fetch from jsonblob.com
-          const res = await fetch(`https://jsonblob.com/api/jsonBlob/${viewParam}`)
-          data = await res.json()
+          // Fetch from GitHub Gist
+          const res = await fetch(`https://api.github.com/gists/${viewParam}`)
+          const json = await res.json()
+          const content = json.files?.['model.json']?.content
+          data = JSON.parse(content)
         } else {
           let jsonStr = decompressFromEncodedURIComponent(viewParam)
           if (!jsonStr) jsonStr = decompressFromEncodedURIComponent(decodeURIComponent(viewParam))
