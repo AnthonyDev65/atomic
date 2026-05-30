@@ -30,12 +30,17 @@ export default function App() {
         const json = decompressFromEncodedURIComponent(viewParam)
         const data = JSON.parse(json)
         if (data.layers) {
-          useStore.setState({
+          const state = {
             layers: data.layers,
             groups: data.groups || [],
             viewerData: data.viewer || useStore.getState().viewerData,
             viewerMode: true,
-          })
+          }
+          // Restore graphics config if present
+          if (data.graphics) {
+            Object.assign(state, data.graphics)
+          }
+          useStore.setState(state)
           // Clean URL
           window.history.replaceState({}, '', window.location.pathname)
         }

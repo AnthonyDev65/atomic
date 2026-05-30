@@ -3,12 +3,15 @@ import { useStore } from '../store/useStore'
 import { compressToEncodedURIComponent } from 'lz-string'
 
 export default function ShareModal({ onClose }) {
-  const { layers, groups, viewerData } = useStore()
+  const { layers, groups, viewerData, quality, bloomStrength, bloomRadius, bloomThreshold, emissiveIntensity, exposure, bgColor } = useStore()
   const [link, setLink] = useState('')
   const [copied, setCopied] = useState(false)
 
   const generate = () => {
-    const data = { layers, groups, viewer: viewerData }
+    const data = {
+      layers, groups, viewer: viewerData,
+      graphics: { quality, bloomStrength, bloomRadius, bloomThreshold, emissiveIntensity, exposure, bgColor }
+    }
     const compressed = compressToEncodedURIComponent(JSON.stringify(data))
     const url = `${window.location.origin}${window.location.pathname}?view=${compressed}`
 
