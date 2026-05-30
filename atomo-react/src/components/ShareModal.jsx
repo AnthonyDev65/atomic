@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useStore } from '../store/useStore'
 import { compressToEncodedURIComponent } from 'lz-string'
 
-const GIST_API = 'https://api.github.com/gists'
+const DPASTE_API = 'https://dpaste.com/api/v2/'
 
 export default function ShareModal({ onClose }) {
   const { layers, groups, viewerData, quality, bloomStrength, bloomRadius, bloomThreshold, emissiveIntensity, exposure, bgColor } = useStore()
@@ -26,20 +26,23 @@ export default function ShareModal({ onClose }) {
   const generateCloud = async () => {
     setLoading(true)
     try {
-      const res = await fetch(GIST_API, {
+      const body = new URLSearchParams({
+        content: JSON.stringify(data),
+        syntax: 'json',
+        expiry_days: '365',
+        title: 'Atomo Model'
+      })
+      const res = await fetch(DPASTE_API, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/vnd.github+json' },
-        body: JSON.stringify({
-          description: 'Atomo Editor - Shared Model',
-          public: true,
-          files: { 'model.json': { content: JSON.stringify(data) } }
-        })
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: body.toString()
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const json = await res.json()
-      const gistId = json.id
-      if (gistId) {
-        const url = `${window.location.origin}${window.location.pathname}#gist=${gistId}`
+      const pasteUrl = await res.text()
+      // Extract ID from URL like https://dpaste.com/9Y57BZA
+      const id = pasteUrl.trim().split('/').filter(Boolean).pop()
+      if (id) {
+        const url = `${window.location.origin}${window.location.pathname}#paste=${id}`
         setLink(url)
       } else {
         setLink('CLOUD_ERROR')

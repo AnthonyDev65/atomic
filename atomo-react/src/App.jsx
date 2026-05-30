@@ -30,12 +30,12 @@ export default function App() {
 
       if (hash.startsWith('#view=')) {
         viewParam = hash.slice(6)
-      } else if (hash.startsWith('#id=')) {
+      } else if (hash.startsWith('#paste=')) {
         isCloudId = true
-        viewParam = hash.slice(4)
-      } else if (hash.startsWith('#gist=')) {
+        viewParam = hash.slice(7)
+      } else if (hash.startsWith('#id=') || hash.startsWith('#gist=')) {
         isCloudId = true
-        viewParam = hash.slice(6)
+        viewParam = hash.startsWith('#id=') ? hash.slice(4) : hash.slice(6)
       } else {
         const params = new URLSearchParams(window.location.search)
         viewParam = params.get('view')
@@ -45,11 +45,10 @@ export default function App() {
       try {
         let data
         if (isCloudId) {
-          // Fetch from GitHub Gist
-          const res = await fetch(`https://api.github.com/gists/${viewParam}`)
-          const json = await res.json()
-          const content = json.files?.['model.json']?.content
-          data = JSON.parse(content)
+          // Fetch from dpaste.com (raw JSON)
+          const res = await fetch(`https://dpaste.com/${viewParam}.txt`)
+          const text = await res.text()
+          data = JSON.parse(text)
         } else {
           let jsonStr = decompressFromEncodedURIComponent(viewParam)
           if (!jsonStr) jsonStr = decompressFromEncodedURIComponent(decodeURIComponent(viewParam))
