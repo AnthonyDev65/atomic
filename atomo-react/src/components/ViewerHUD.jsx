@@ -17,9 +17,9 @@ export default function ViewerHUD() {
 
   return (
     <>
-      <div className="absolute top-8 left-8 z-[150] pointer-events-none select-none">
+      <div className="absolute top-4 left-4 md:top-8 md:left-8 z-[150] pointer-events-none select-none">
         <p className="text-white/30 text-[9px] tracking-[0.2em] uppercase mb-2 font-light">Atomic Model</p>
-        <h1 className="text-white text-7xl font-extralight leading-none mb-1 tracking-tight">
+        <h1 className="text-white text-5xl md:text-7xl font-extralight leading-none mb-1 tracking-tight">
           {viewerData.symbol}
         </h1>
         <p className="text-white/60 text-xl font-extralight mb-4">{viewerData.name}</p>

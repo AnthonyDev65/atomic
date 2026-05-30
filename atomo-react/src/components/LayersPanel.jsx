@@ -22,7 +22,7 @@ export default function LayersPanel() {
   if (!leftPanelOpen || viewerMode) return null
 
   return (
-    <div className="absolute top-3 left-3 bottom-3 w-56 flex flex-col gap-2 z-40">
+    <div className="absolute top-12 md:top-3 left-2 md:left-3 bottom-2 md:bottom-3 w-[calc(100vw-16px)] md:w-56 flex flex-col gap-2 z-40">
       <AddPanel />
       <LayersListPanel />
     </div>

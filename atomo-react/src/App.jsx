@@ -23,11 +23,17 @@ export default function App() {
 
   // Load shared model from URL on mount
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const viewParam = params.get('view')
-    if (viewParam) {
+    const loadShared = () => {
+      const params = new URLSearchParams(window.location.search)
+      const viewParam = params.get('view')
+      if (!viewParam) return
+
       try {
-        const json = decompressFromEncodedURIComponent(viewParam)
+        // Try decoding - handle both encoded and raw formats
+        let json = decompressFromEncodedURIComponent(viewParam)
+        if (!json) json = decompressFromEncodedURIComponent(decodeURIComponent(viewParam))
+        if (!json) { console.error('Failed to decompress'); return }
+
         const data = JSON.parse(json)
         if (data.layers) {
           const state = {
@@ -36,16 +42,15 @@ export default function App() {
             viewerData: data.viewer || useStore.getState().viewerData,
             viewerMode: true,
           }
-          // Restore graphics config if present
-          if (data.graphics) {
-            Object.assign(state, data.graphics)
-          }
+          if (data.graphics) Object.assign(state, data.graphics)
           useStore.setState(state)
-          // Clean URL
           window.history.replaceState({}, '', window.location.pathname)
         }
       } catch (e) { console.error('Failed to load shared model:', e) }
     }
+
+    // Small delay to ensure everything is mounted
+    setTimeout(loadShared, 100)
   }, [])
 
   useEffect(() => {
@@ -88,7 +93,7 @@ export default function App() {
   }, [deselect, setTransformMode, toggleScript, selectedId, removeLayer])
 
   return (
-    <div className="w-screen h-screen relative bg-[#1a1a1a]">
+    <div className="w-screen h-screen relative bg-[#1a1a1a] overflow-hidden touch-none">
       <Scene />
       <Toolbar />
       <LayersPanel />
@@ -100,7 +105,7 @@ export default function App() {
       {shareOpenStore && <ShareModal onClose={toggleShare} />}
 
       {!viewerMode && (
-        <p className="absolute bottom-3 left-1/2 -translate-x-1/2 text-[#444] font-mono text-[10px] tracking-wider pointer-events-none select-none">
+        <p className="absolute bottom-3 left-1/2 -translate-x-1/2 text-[#444] font-mono text-[10px] tracking-wider pointer-events-none select-none hidden md:block">
           G move · R rotate · S scale · D deselect · Del delete · F2 script
         </p>
       )}

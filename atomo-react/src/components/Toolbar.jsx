@@ -57,7 +57,7 @@ export default function Toolbar() {
   }
 
   return (
-    <div className="absolute top-3 left-1/2 -translate-x-1/2 flex items-center gap-1 z-50 bg-[#2c2c2c] rounded-lg px-1.5 py-1 border border-[#3d3d3d] shadow-lg">
+    <div className="absolute top-2 left-1/2 -translate-x-1/2 flex items-center gap-0.5 md:gap-1 z-50 bg-[#2c2c2c] rounded-lg px-1 md:px-1.5 py-1 border border-[#3d3d3d] shadow-lg max-w-[95vw] overflow-x-auto">
       <ToolBtn onClick={exportProject} title="Export project">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
       </ToolBtn>
