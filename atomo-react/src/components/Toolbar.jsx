@@ -7,15 +7,15 @@ export default function Toolbar() {
     toggleLeftPanel, toggleRightPanel, toggleScript, toggleConfig,
     quality, setQuality, openViewerSetup, viewerMode,
     transformMode, setTransformMode, layers, groups, clearLayers,
-    toggleShare,
+    toggleShare, toggleTimeline, timelineOpen,
   } = useStore()
   const fileInputRef = useRef(null)
 
   if (viewerMode) return null
 
   const exportProject = () => {
-    const viewerData = useStore.getState().viewerData
-    const data = { version: '2.0', app: 'atomo-react', created: new Date().toISOString(), layers, groups, viewer: viewerData }
+    const { viewerData, timeline } = useStore.getState()
+    const data = { version: '2.0', app: 'atomo-react', created: new Date().toISOString(), layers, groups, viewer: viewerData, anim: { duration: timeline.duration, loop: timeline.loop } }
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob); a.download = 'project.atomo'; a.click()
@@ -53,7 +53,8 @@ export default function Toolbar() {
         useStore.setState({
           layers: importedLayers,
           groups: data.groups || [],
-          ...(data.viewer ? { viewerData: data.viewer } : {})
+          ...(data.viewer ? { viewerData: data.viewer } : {}),
+          ...(data.anim ? { timeline: { ...useStore.getState().timeline, ...data.anim, time: 0, playing: false } } : {}),
         })
       } catch (err) { alert('Error: ' + err.message) }
     }
@@ -100,6 +101,10 @@ export default function Toolbar() {
 
       <ToolBtn onClick={toggleScript} title="Script (F2)">
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M4 4l-3 3 3 3M10 4l3 3-3 3M8 2l-2 10" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>
+      </ToolBtn>
+
+      <ToolBtn onClick={toggleTimeline} active={timelineOpen} title="Línea de tiempo / animación">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 7h12" stroke="currentColor" strokeWidth="1.2"/><path d="M4 4.5l1.5 2.5L4 9.5z" fill="currentColor"/><path d="M9 4.5l1.5 2.5L9 9.5z" fill="currentColor"/></svg>
       </ToolBtn>
 
       <select

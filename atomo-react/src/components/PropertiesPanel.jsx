@@ -1,16 +1,24 @@
 import { useStore } from '../store/useStore'
 import { useState } from 'react'
 import DragInput from './DragInput'
+import { ANIM_PROPS, invalidateRef } from '../anim'
 
 export default function PropertiesPanel() {
-  const { layers, selectedId, rightPanelOpen, viewerMode, updateLayer, removeLayer, deselect } = useStore()
+  const { layers, selectedId, rightPanelOpen, viewerMode, updateLayer, removeLayer, deselect, addKeyframe } = useStore()
 
   if (!rightPanelOpen || viewerMode || !selectedId) return null
 
   const layer = layers.find(l => l.id === selectedId)
   if (!layer) return null
 
-  const update = (field, value) => updateLayer(selectedId, { [field]: value })
+  const update = (field, value) => {
+    updateLayer(selectedId, { [field]: value })
+    const tl = useStore.getState().timeline
+    if (tl.recording && ANIM_PROPS.includes(field)) {
+      addKeyframe(selectedId, field, tl.time, value)
+      invalidateRef.current?.()
+    }
+  }
   const pos = layer.position || [0, 0, 0]
   const scale = layer.scale || [1, 1, 1]
   const rot = layer.rotation || [0, 0, 0]
@@ -153,6 +161,13 @@ export default function PropertiesPanel() {
         {(layer.type === 'torus' || layer.type === 'orbital_p' || layer.type === 'orbital_d' || layer.type === 'orbital_f') && (
           <Section title="Electrons on orbit">
             <AddElectronToOrbit layer={layer} />
+          </Section>
+        )}
+
+        {/* Share electrons with another orbital (covalent bond) */}
+        {(layer.type === 'torus' || layer.type === 'orbital_p' || layer.type === 'orbital_d' || layer.type === 'orbital_f') && (
+          <Section title="Share electrons">
+            <ShareElectrons layer={layer} />
           </Section>
         )}
 
@@ -321,6 +336,89 @@ function AddElectronToOrbit({ layer }) {
       <button onClick={addElectron}
         className="w-full py-1.5 rounded bg-[#1a2a3a] border border-[#2a4a6a] text-[#6af] text-[10px] font-medium hover:bg-[#203050] transition">
         Add orbiting electron
+      </button>
+    </div>
+  )
+}
+
+function ShareElectrons({ layer }) {
+  const { layers, addLayer, incrementCounter } = useStore()
+  const orbitals = layers.filter(l => l.id !== layer.id && ['torus', 'orbital_p', 'orbital_d', 'orbital_f'].includes(l.type))
+
+  const [target, setTarget] = useState('')
+  const [count, setCount] = useState(1)
+  const [mode, setMode] = useState('transfer')
+  const [t0, setT0] = useState(1)
+  const [duration, setDuration] = useState(1)
+  const [period, setPeriod] = useState(2)
+  const [eColor, setEColor] = useState('#ffdd44')
+
+  const create = () => {
+    if (!target) return
+    // Visual bond line between the two orbitals
+    addLayer({
+      id: crypto.randomUUID(), name: `bond_${incrementCounter()}`, type: 'bond',
+      color: '#88ccff', bondFrom: layer.id, bondTo: target, visible: true, opacity: 0.6,
+      position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1],
+    })
+    // Shared electrons
+    const n = Math.max(1, Math.round(count))
+    for (let i = 0; i < n; i++) {
+      const phase = (Math.PI * 2 / n) * i
+      addLayer({
+        id: crypto.randomUUID(), name: `e⁻shared_${incrementCounter()}`, type: 'sphere',
+        color: eColor, position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1],
+        visible: true, opacity: 1, sphereRadius: 0.08, label: 'e',
+        share: { fromId: layer.id, toId: target, mode, t0, duration, period, speed: 2, angle: phase },
+      })
+    }
+  }
+
+  if (orbitals.length === 0) {
+    return <p className="text-[9px] text-[#555]">Create another orbital to share electrons with it.</p>
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <PropRow label="Share with">
+        <select value={target} onChange={(e) => setTarget(e.target.value)}
+          className="flex-1 px-1.5 py-1 bg-[#1e1e1e] border border-[#3d3d3d] rounded text-white text-[10px] outline-none focus:border-[#4c8bf5]/60 max-w-[120px]">
+          <option value="">Select orbital…</option>
+          {orbitals.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+        </select>
+      </PropRow>
+      <PropRow label="Electrons">
+        <DragInput label="N" value={count} onChange={(v) => setCount(Math.max(1, Math.round(v)))} step={1} min={1} color="#fd4" />
+      </PropRow>
+      <PropRow label="Color">
+        <input type="color" value={eColor} onChange={(e) => setEColor(e.target.value)}
+          className="w-6 h-4 rounded cursor-pointer bg-transparent border border-[#3d3d3d]" />
+      </PropRow>
+      <PropRow label="Mode">
+        <select value={mode} onChange={(e) => setMode(e.target.value)}
+          className="flex-1 px-1.5 py-1 bg-[#1e1e1e] border border-[#3d3d3d] rounded text-white text-[10px] outline-none focus:border-[#4c8bf5]/60 max-w-[120px]">
+          <option value="transfer">Transfer (one-shot)</option>
+          <option value="oscillate">Oscillate (back & forth)</option>
+        </select>
+      </PropRow>
+      {mode === 'transfer' ? (
+        <>
+          <PropRow label="At time (s)">
+            <DragInput label="T" value={t0} onChange={(v) => setT0(Math.max(0, v))} step={0.1} min={0} color="#4af" />
+          </PropRow>
+          <PropRow label="Travel (s)">
+            <DragInput label="D" value={duration} onChange={(v) => setDuration(Math.max(0.05, v))} step={0.1} min={0.05} color="#4af" />
+          </PropRow>
+          <p className="text-[9px] text-[#555]">Plays on the timeline at the set time.</p>
+        </>
+      ) : (
+        <PropRow label="Period (s)">
+          <DragInput label="P" value={period} onChange={(v) => setPeriod(Math.max(0.1, v))} step={0.1} min={0.1} color="#4af" />
+        </PropRow>
+      )}
+      <button onClick={create} disabled={!target}
+        className="w-full py-1.5 rounded bg-[#2a1a3a] border border-[#5a3a7a] text-[#c8a8ff] text-[10px] font-medium hover:bg-[#352050] transition disabled:opacity-40">
+        ⚡ Create shared electrons
       </button>
     </div>
   )

@@ -7,6 +7,8 @@ import ScriptConsole from './components/ScriptConsole'
 import ViewerSetup from './components/ViewerSetup'
 import ViewerHUD from './components/ViewerHUD'
 import ShareModal from './components/ShareModal'
+import KeyframePanel from './components/KeyframePanel'
+import GroupPanel from './components/GroupPanel'
 import { useStore } from './store/useStore'
 import { useEffect } from 'react'
 import { decompressFromEncodedURIComponent } from 'lz-string'
@@ -57,11 +59,15 @@ export default function App() {
         }
 
         if (data?.layers) {
+          const kfd = (o) => o.keyframes && Object.values(o.keyframes).some(t => t?.length)
+          const animated = data.layers.some(l => kfd(l) || (l.share && l.share.mode === 'transfer')) || (data.groups || []).some(kfd)
+          const cur = useStore.getState().timeline
           const state = {
             layers: data.layers,
             groups: data.groups || [],
             viewerData: data.viewer || useStore.getState().viewerData,
             viewerMode: true,
+            timeline: { ...cur, ...(data.anim || {}), time: 0, playing: animated },
           }
           if (data.graphics) Object.assign(state, data.graphics)
           useStore.setState(state)
@@ -80,6 +86,12 @@ export default function App() {
       if ((e.key === 'd' || e.key === 'D') && e.ctrlKey) {
         e.preventDefault()
         const state = useStore.getState()
+        // Duplicate the whole group when one is selected
+        if (state.selectedGroupId) {
+          const newId = state.duplicateGroup(state.selectedGroupId)
+          if (newId) state.selectGroup(newId)
+          return
+        }
         const layer = state.layers.find(l => l.id === state.selectedId)
         if (layer) {
           const newId = crypto.randomUUID()
@@ -118,10 +130,12 @@ export default function App() {
       <Toolbar />
       <LayersPanel />
       <PropertiesPanel />
+      <GroupPanel />
       <ConfigPanel />
       <ScriptConsole />
       <ViewerSetup />
       <ViewerHUD />
+      <KeyframePanel />
       {shareOpenStore && <ShareModal onClose={toggleShare} />}
 
       {!viewerMode && (

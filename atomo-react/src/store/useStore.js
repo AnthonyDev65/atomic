@@ -41,6 +41,10 @@ export const useStore = create((set, get) => ({
   showAxes: true,
   bgColor: '#0a0a0f',
 
+  // Timeline / keyframe animation
+  timelineOpen: false,
+  timeline: { playing: false, time: 0, duration: 5, loop: true, recording: false },
+
   // Viewer HUD
   viewerData: {
     symbol: 'Ne',
@@ -87,12 +91,62 @@ export const useStore = create((set, get) => ({
   setSnapToGrid: (v) => set({ snapToGrid: v }),
   setGridSnap: (v) => set({ gridSnap: v }),
   setOrbitalMode: (v) => set({ orbitalMode: v }),
-  enterViewerMode: () => set({ viewerMode: true, viewerSetupOpen: false, selectedId: null }),
+  enterViewerMode: () => set((s) => {
+    const kfd = (o) => o.keyframes && Object.values(o.keyframes).some(t => t?.length)
+    const animated = s.layers.some(l => kfd(l) || (l.share && l.share.mode === 'transfer')) || s.groups.some(kfd)
+    return {
+      viewerMode: true, viewerSetupOpen: false, selectedId: null,
+      timeline: { ...s.timeline, time: 0, playing: animated },
+    }
+  }),
   exitViewerMode: () => set({ viewerMode: false }),
   setViewerData: (data) => set({ viewerData: { ...get().viewerData, ...data } }),
   openViewerSetup: () => set({ viewerSetupOpen: true }),
   closeViewerSetup: () => set({ viewerSetupOpen: false }),
   incrementCounter: () => { const next = get().layerCounter + 1; set({ layerCounter: next }); return next; },
+
+  // === Timeline actions ===
+  toggleTimeline: () => set((s) => ({ timelineOpen: !s.timelineOpen })),
+  setTimeline: (patch) => set((s) => ({ timeline: { ...s.timeline, ...patch } })),
+  playTimeline: () => set((s) => ({ timeline: { ...s.timeline, playing: true } })),
+  pauseTimeline: () => set((s) => ({ timeline: { ...s.timeline, playing: false } })),
+  togglePlay: () => set((s) => ({ timeline: { ...s.timeline, playing: !s.timeline.playing } })),
+  stopTimeline: () => set((s) => ({ timeline: { ...s.timeline, playing: false, time: 0 } })),
+  setTime: (t) => set((s) => ({ timeline: { ...s.timeline, time: Math.max(0, t) } })),
+  setDuration: (d) => set((s) => ({ timeline: { ...s.timeline, duration: Math.max(0.1, d) } })),
+  toggleLoop: () => set((s) => ({ timeline: { ...s.timeline, loop: !s.timeline.loop } })),
+  toggleRecording: () => set((s) => ({ timeline: { ...s.timeline, recording: !s.timeline.recording } })),
+
+  // Insert (or replace) a keyframe on a layer's property at time t.
+  addKeyframe: (layerId, prop, t, value) => set((s) => ({
+    layers: s.layers.map(l => {
+      if (l.id !== layerId) return l
+      const kf = { ...(l.keyframes || {}) }
+      const track = [...(kf[prop] || [])]
+      const v = Array.isArray(value) ? [...value] : value
+      const idx = track.findIndex(k => Math.abs(k.t - t) < 0.0005)
+      if (idx >= 0) track[idx] = { t: track[idx].t, v }
+      else track.push({ t, v })
+      track.sort((a, b) => a.t - b.t)
+      kf[prop] = track
+      return { ...l, keyframes: kf }
+    })
+  })),
+
+  removeKeyframe: (layerId, prop, t) => set((s) => ({
+    layers: s.layers.map(l => {
+      if (l.id !== layerId) return l
+      const kf = { ...(l.keyframes || {}) }
+      if (!kf[prop]) return l
+      kf[prop] = kf[prop].filter(k => Math.abs(k.t - t) >= 0.0005)
+      if (kf[prop].length === 0) delete kf[prop]
+      return { ...l, keyframes: kf }
+    })
+  })),
+
+  clearKeyframes: (layerId) => set((s) => ({
+    layers: s.layers.map(l => l.id === layerId ? { ...l, keyframes: undefined } : l)
+  })),
 
   // Groups
   groups: [], // { id, name, children: [layerId], collapsed: bool }
@@ -123,6 +177,86 @@ export const useStore = create((set, get) => ({
   renameGroup: (id, name) => set((s) => ({
     groups: s.groups.map(g => g.id === id ? { ...g, name } : g)
   })),
+  // Group transform (relative to the group's pivot) + keyframes
+  updateGroup: (id, patch) => set((s) => ({
+    groups: s.groups.map(g => g.id === id ? { ...g, ...patch } : g)
+  })),
+  addGroupKeyframe: (groupId, prop, t, value) => set((s) => ({
+    groups: s.groups.map(g => {
+      if (g.id !== groupId) return g
+      const kf = { ...(g.keyframes || {}) }
+      const track = [...(kf[prop] || [])]
+      const v = Array.isArray(value) ? [...value] : value
+      const idx = track.findIndex(k => Math.abs(k.t - t) < 0.0005)
+      if (idx >= 0) track[idx] = { t: track[idx].t, v }
+      else track.push({ t, v })
+      track.sort((a, b) => a.t - b.t)
+      kf[prop] = track
+      return { ...g, keyframes: kf }
+    })
+  })),
+  removeGroupKeyframe: (groupId, prop, t) => set((s) => ({
+    groups: s.groups.map(g => {
+      if (g.id !== groupId) return g
+      const kf = { ...(g.keyframes || {}) }
+      if (!kf[prop]) return g
+      kf[prop] = kf[prop].filter(k => Math.abs(k.t - t) >= 0.0005)
+      if (kf[prop].length === 0) delete kf[prop]
+      return { ...g, keyframes: kf }
+    })
+  })),
+  clearGroupKeyframes: (groupId) => set((s) => ({
+    groups: s.groups.map(g => g.id === groupId ? { ...g, keyframes: undefined } : g)
+  })),
+  // Duplicate a whole group: clones every child with fresh ids, remaps orbital
+  // parent / label parent references, deep-copies keyframes and group transform.
+  duplicateGroup: (groupId) => {
+    const s = get()
+    const group = s.groups.find(g => g.id === groupId)
+    if (!group) return null
+    const cloneKf = (kf) => {
+      if (!kf) return undefined
+      const out = {}
+      for (const k in kf) out[k] = kf[k].map(p => ({ t: p.t, v: Array.isArray(p.v) ? [...p.v] : p.v }))
+      return out
+    }
+    const offset = 0.3
+    const idMap = new Map()
+    const newLayers = group.children
+      .map(cid => s.layers.find(l => l.id === cid))
+      .filter(Boolean)
+      .map(l => { const nid = crypto.randomUUID(); idMap.set(l.id, nid); return { ...l, id: nid } })
+    newLayers.forEach(nl => {
+      const p = nl.position || [0, 0, 0]
+      nl.position = [p[0] + offset, p[1] + offset, p[2]]
+      if (nl.orbital) {
+        nl.orbital = { ...nl.orbital }
+        if (nl.orbital.parentId && idMap.has(nl.orbital.parentId)) nl.orbital.parentId = idMap.get(nl.orbital.parentId)
+      }
+      if (nl.share) {
+        nl.share = { ...nl.share }
+        if (idMap.has(nl.share.fromId)) nl.share.fromId = idMap.get(nl.share.fromId)
+        if (idMap.has(nl.share.toId)) nl.share.toId = idMap.get(nl.share.toId)
+      }
+      if (idMap.has(nl.bondFrom)) nl.bondFrom = idMap.get(nl.bondFrom)
+      if (idMap.has(nl.bondTo)) nl.bondTo = idMap.get(nl.bondTo)
+      if (nl.labelParentId && idMap.has(nl.labelParentId)) nl.labelParentId = idMap.get(nl.labelParentId)
+      if (nl.keyframes) nl.keyframes = cloneKf(nl.keyframes)
+    })
+    const newGroupId = crypto.randomUUID()
+    const newGroup = {
+      ...group,
+      id: newGroupId,
+      name: (group.name || 'Group') + '_copy',
+      collapsed: false,
+      children: newLayers.map(l => l.id),
+      keyframes: cloneKf(group.keyframes),
+      position: group.position ? [...group.position] : undefined,
+      rotation: group.rotation ? [...group.rotation] : undefined,
+    }
+    set(st => ({ layers: [...st.layers, ...newLayers], groups: [...st.groups, newGroup] }))
+    return newGroupId
+  },
   moveGroup: (groupId, delta) => set((s) => {
     const group = s.groups.find(g => g.id === groupId)
     if (!group) return s
