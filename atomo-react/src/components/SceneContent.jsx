@@ -242,30 +242,40 @@ function TimelineDriver() {
     return () => el.removeEventListener('pointerdown', onDown)
   }, [gl])
 
-  // Frame all scene objects: fit the camera to their bounding sphere and aim
-  // the orbit pivot at their center. Falls back to the default view if empty.
+  // Center the camera (F). With a selection (layer / multi-select / group) it
+  // frames just that; with nothing selected it centers on the origin (axes).
+  // The current viewing angle is preserved either way.
   useEffect(() => {
     centerCameraRef.current = () => {
+      const s = useStore.getState()
+      // Which meshes to frame, based on the current selection.
+      let meshes = []
+      if (s.selectedGroupId) {
+        meshes = descendantLayerIds(s.groups, s.selectedGroupId).map(id => meshRegistry.get(id)).filter(Boolean)
+      } else if (s.selectedIds?.length) {
+        meshes = s.selectedIds.map(id => meshRegistry.get(id)).filter(Boolean)
+      } else if (s.selectedId) {
+        const m = meshRegistry.get(s.selectedId)
+        if (m) meshes = [m]
+      }
+
       const box = new THREE.Box3()
       let any = false
-      meshRegistry.forEach((m) => {
-        if (!m || m.visible === false) return
-        box.expandByObject(m); any = true
-      })
+      meshes.forEach((m) => { if (m && m.visible !== false) { box.expandByObject(m); any = true } })
+
+      // No selection → center on the origin/axes; frame a region the size of
+      // the axes helper (length 2) so the pivot lands on the world center.
+      const center = (any && !box.isEmpty()) ? box.getCenter(new THREE.Vector3()) : new THREE.Vector3(0, 0, 0)
+      const radius = (any && !box.isEmpty()) ? Math.max(box.getSize(new THREE.Vector3()).length() / 2, 0.3) : 2
+
       const target = controls?.target || new THREE.Vector3()
-      if (!any || box.isEmpty()) {
-        target.set(0, 0, 0)
-        camera.position.set(0, 2, 6)
-      } else {
-        const center = box.getCenter(new THREE.Vector3())
-        const radius = Math.max(box.getSize(new THREE.Vector3()).length() / 2, 0.5)
-        const fov = (camera.fov || 60) * (Math.PI / 180)
-        const dist = (radius / Math.sin(fov / 2)) * 1.15
-        const dir = camera.position.clone().sub(target).normalize()
-        if (dir.lengthSq() === 0) dir.set(0, 0.3, 1).normalize()
-        target.copy(center)
-        camera.position.copy(center).add(dir.multiplyScalar(dist))
-      }
+      const fov = (camera.fov || 60) * (Math.PI / 180)
+      const dist = (radius / Math.sin(fov / 2)) * 1.15
+      const dir = camera.position.clone().sub(target).normalize()
+      if (dir.lengthSq() === 0) dir.set(0, 0.3, 1).normalize()
+      target.copy(center)
+      camera.position.copy(center).add(dir.multiplyScalar(dist))
+
       camera.lookAt(target)
       controls?.update?.()
       invalidate()

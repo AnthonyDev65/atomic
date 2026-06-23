@@ -25,9 +25,12 @@ export default function GroupPanel() {
     const tl = useStore.getState().timeline
     if (tl.recording && ANIMATABLE.includes(field)) {
       addGroupKeyframe(group.id, field, tl.time, value)
-      invalidateRef.current?.()
     }
+    invalidateRef.current?.()
   }
+
+  const pos = group.position || [0, 0, 0]
+  const rotDeg = (group.rotation || [0, 0, 0]).map(r => Math.round(r * 180 / Math.PI))
 
   return (
     <div className="absolute top-12 right-2 md:right-3 w-[min(15rem,calc(100vw-1rem))] md:w-64 max-h-[calc(100dvh-4.5rem)] overflow-y-auto bg-[#252525] border border-[#3d3d3d] rounded-lg shadow-xl z-40">
@@ -40,13 +43,35 @@ export default function GroupPanel() {
       </div>
 
       <div className="p-3 space-y-2.5">
+        {/* Position offset (relative to the group's center) */}
+        <div className="space-y-1">
+          <span className="text-[9px] text-[#666] uppercase tracking-wider font-medium">Position</span>
+          <div className="flex gap-1">
+            {['X', 'Y', 'Z'].map((axis, i) => (
+              <DragInput key={axis} label={axis} value={pos[i]} color={['#e55', '#5b5', '#55e'][i]} step={0.1}
+                onChange={(v) => { const n = [...pos]; n[i] = v; update('position', n) }} />
+            ))}
+          </div>
+        </div>
+
+        {/* Rotation in degrees */}
+        <div className="space-y-1">
+          <span className="text-[9px] text-[#666] uppercase tracking-wider font-medium">Rotation</span>
+          <div className="flex gap-1">
+            {['X°', 'Y°', 'Z°'].map((axis, i) => (
+              <DragInput key={axis} label={axis} value={rotDeg[i]} color={['#e55', '#5b5', '#55e'][i]} step={5}
+                onChange={(v) => { const n = [...rotDeg]; n[i] = v; update('rotation', n.map(d => d * Math.PI / 180)) }} />
+            ))}
+          </div>
+        </div>
+
         <div className="flex items-center justify-between">
           <span className="text-[11px] text-[#999]">Opacity</span>
           <DragInput label="O" value={group.opacity ?? 1} onChange={(v) => update('opacity', Math.max(0, Math.min(1, v)))} step={0.01} min={0} color="#ec6" />
         </div>
 
         <p className="text-[9px] text-[#555] leading-relaxed">
-          Move / rotate the whole group with the gizmo (G / R). Enable <span className="text-[#ff8888]">REC</span> in the
+          Edit values here or use the gizmo (G / R). Enable <span className="text-[#ff8888]">REC</span> in the
           timeline to keyframe position, rotation and opacity.
         </p>
 

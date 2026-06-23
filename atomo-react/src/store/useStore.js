@@ -102,7 +102,7 @@ export const useStore = create((set, get) => ({
     const ids = s.selectedIds.includes(id) ? s.selectedIds.filter(i => i !== id) : [...s.selectedIds, id]
     return { selectedIds: ids, selectedId: ids[ids.length - 1] || null, selectedGroupId: null }
   }),
-  selectGroup: (id) => set({ selectedGroupId: id, selectedId: null, selectedIds: [] }),
+  selectGroup: (id) => set({ selectedGroupId: id, selectedId: null, selectedIds: [], rightPanelOpen: true }),
   deselect: () => set({ selectedId: null, selectedIds: [], selectedGroupId: null }),
   toggleLeftPanel: () => set((s) => ({ leftPanelOpen: !s.leftPanelOpen })),
   toggleRightPanel: () => set((s) => ({ rightPanelOpen: !s.rightPanelOpen })),
