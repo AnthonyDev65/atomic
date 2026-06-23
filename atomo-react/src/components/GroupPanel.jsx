@@ -11,6 +11,15 @@ export default function GroupPanel() {
   const group = groups.find(g => g.id === selectedGroupId)
   if (!group) return null
 
+  // Count layers across this group and any nested subgroups.
+  const countDescendantLayers = (gid) => {
+    const g = groups.find(x => x.id === gid)
+    if (!g) return 0
+    return g.children.length + groups.filter(x => x.parentId === gid).reduce((n, sg) => n + countDescendantLayers(sg.id), 0)
+  }
+  const subGroupCount = groups.filter(g => g.parentId === group.id).length
+  const layerCount = countDescendantLayers(group.id)
+
   const update = (field, value) => {
     updateGroup(group.id, { [field]: value })
     const tl = useStore.getState().timeline
@@ -21,13 +30,13 @@ export default function GroupPanel() {
   }
 
   return (
-    <div className="absolute top-12 right-2 md:right-3 w-60 md:w-64 bg-[#252525] border border-[#3d3d3d] rounded-lg shadow-xl z-40">
+    <div className="absolute top-12 right-2 md:right-3 w-[min(15rem,calc(100vw-1rem))] md:w-64 max-h-[calc(100dvh-4.5rem)] overflow-y-auto bg-[#252525] border border-[#3d3d3d] rounded-lg shadow-xl z-40">
       <div className="border-b border-[#3d3d3d] px-3 py-2.5">
         <div className="flex items-center gap-2">
           <span className="text-[8px] text-[#8ab4f8] bg-[#4c8bf5]/15 px-1 rounded">GROUP</span>
           <span className="text-white text-xs font-medium truncate">{group.name}</span>
         </div>
-        <p className="text-[9px] text-[#666] mt-1">{group.children.length} objects · animates around its center</p>
+        <p className="text-[9px] text-[#666] mt-1">{layerCount} objects{subGroupCount > 0 ? ` · ${subGroupCount} subgroup${subGroupCount > 1 ? 's' : ''}` : ''} · animates around its center</p>
       </div>
 
       <div className="p-3 space-y-2.5">

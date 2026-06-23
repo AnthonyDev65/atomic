@@ -22,7 +22,7 @@ export default function LayersPanel() {
   if (!leftPanelOpen || viewerMode) return null
 
   return (
-    <div className="absolute top-12 md:top-3 left-2 md:left-3 bottom-2 md:bottom-3 w-[calc(100vw-16px)] md:w-56 flex flex-col gap-2 z-40">
+    <div className="absolute top-12 md:top-3 left-2 md:left-3 bottom-2 md:bottom-3 w-[min(18rem,calc(100vw-1rem))] md:w-56 flex flex-col gap-2 z-40">
       <AddPanel />
       <LayersListPanel />
     </div>
@@ -31,7 +31,7 @@ export default function LayersPanel() {
 
 // ===== ADD PANEL (top, fixed height) =====
 function AddPanel() {
-  const [tab, setTab] = useState('objects') // 'objects' | 'orbital' | 'particles'
+  const [tab, setTab] = useState('objects') // 'objects' | 'orbital' | 'nucleus' | 'particles'
 
   return (
     <div className="bg-[#252525] border border-[#3d3d3d] rounded-lg shadow-xl overflow-hidden shrink-0">
@@ -39,11 +39,13 @@ function AddPanel() {
       <div className="flex border-b border-[#3d3d3d]">
         <MiniTab active={tab === 'objects'} onClick={() => setTab('objects')}>Objects</MiniTab>
         <MiniTab active={tab === 'orbital'} onClick={() => setTab('orbital')}>Orbital</MiniTab>
+        <MiniTab active={tab === 'nucleus'} onClick={() => setTab('nucleus')}>Nucleus</MiniTab>
         <MiniTab active={tab === 'particles'} onClick={() => setTab('particles')}>Particles</MiniTab>
       </div>
       <div className="p-2.5">
         {tab === 'objects' && <ObjectsTab />}
         {tab === 'orbital' && <OrbitalTab />}
+        {tab === 'nucleus' && <NucleusTab />}
         {tab === 'particles' && <ParticlesTab />}
       </div>
     </div>
@@ -193,6 +195,95 @@ function OrbitalTab() {
   )
 }
 
+// Packs N nucleons into concentric spherical shells, each shell evenly spread
+// with a Fibonacci (golden-angle) distribution so they sit on neat rings — the
+// tightest "circularly aligned" arrangement. `spacing` = center-to-center gap.
+function packNucleons(N, spacing) {
+  const pts = [[0, 0, 0]]
+  const golden = Math.PI * (3 - Math.sqrt(5))
+  let shell = 1
+  while (pts.length < N) {
+    const R = shell * spacing
+    // How many fit on this shell ~ surface area / area-per-nucleon (hex packing).
+    const cap = Math.max(1, Math.round((4 * Math.PI * R * R) / (spacing * spacing * 1.05)))
+    const take = Math.min(cap, N - pts.length)
+    for (let i = 0; i < take; i++) {
+      const y = 1 - ((i + 0.5) / take) * 2          // -1 → 1
+      const rr = Math.sqrt(Math.max(0, 1 - y * y))
+      const theta = golden * i + shell * 0.6         // offset each shell so they interlock
+      pts.push([Math.cos(theta) * rr * R, y * R, Math.sin(theta) * rr * R])
+    }
+    shell++
+  }
+  return pts.slice(0, N)
+}
+
+function NucleusTab() {
+  const { addLayer, addGroup, addToGroup, incrementCounter } = useStore()
+  const [protons, setProtons] = useState(10)
+  const [neutrons, setNeutrons] = useState(10)
+  const [size, setSize] = useState(0.18)
+  const [protonColor, setProtonColor] = useState('#e23b3b')
+  const [neutronColor, setNeutronColor] = useState('#2f4fd6')
+  const [mix, setMix] = useState(true)
+
+  const total = protons + neutrons
+
+  const create = () => {
+    if (total < 1) return
+    const groupId = addGroup(`Nucleus_${protons}p${neutrons}n_${incrementCounter()}`)
+
+    // Slight overlap so the nucleons read as a packed, merged cluster.
+    const spacing = size * 2 * 0.9
+    const pts = packNucleons(total, spacing)
+
+    // Build a color list (P protons + N neutrons) and optionally interleave it
+    // so protons/neutrons end up intermixed like a real nucleus.
+    const isProton = pts.map((_, i) => i < protons)
+    if (mix) {
+      for (let i = isProton.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1))
+        ;[isProton[i], isProton[j]] = [isProton[j], isProton[i]]
+      }
+    }
+
+    let p = 0, n = 0
+    pts.forEach((pos, i) => {
+      const proton = isProton[i]
+      const idx = proton ? ++p : ++n
+      const id = crypto.randomUUID()
+      addLayer({
+        id, name: proton ? `p⁺_${idx}` : `n⁰_${idx}`, type: 'sphere',
+        color: proton ? protonColor : neutronColor,
+        position: pos, rotation: [0, 0, 0], scale: [1, 1, 1],
+        visible: true, opacity: 1, sphereRadius: size,
+      })
+      addToGroup(groupId, id)
+    })
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <Row label="Protons"><input type="number" value={protons} onChange={(e) => setProtons(Math.max(0, Math.min(150, +e.target.value)))} min={0} max={150}
+        className="w-14 px-1 py-0.5 bg-[#1e1e1e] border border-[#3d3d3d] rounded text-white text-[10px] text-center outline-none focus:border-[#4c8bf5]/60" /></Row>
+      <Row label="Neutrons"><input type="number" value={neutrons} onChange={(e) => setNeutrons(Math.max(0, Math.min(200, +e.target.value)))} min={0} max={200}
+        className="w-14 px-1 py-0.5 bg-[#1e1e1e] border border-[#3d3d3d] rounded text-white text-[10px] text-center outline-none focus:border-[#4c8bf5]/60" /></Row>
+      <Row label="Size"><input type="number" value={size} onChange={(e) => setSize(+e.target.value)} min={0.05} max={1} step={0.01}
+        className="w-14 px-1 py-0.5 bg-[#1e1e1e] border border-[#3d3d3d] rounded text-white text-[10px] text-center outline-none focus:border-[#4c8bf5]/60" /></Row>
+      <div className="flex gap-1 pt-1">
+        <Row label="p⁺"><input type="color" value={protonColor} onChange={(e) => setProtonColor(e.target.value)} className="w-6 h-4 rounded cursor-pointer bg-transparent border border-[#3d3d3d]" /></Row>
+        <Row label="n⁰"><input type="color" value={neutronColor} onChange={(e) => setNeutronColor(e.target.value)} className="w-6 h-4 rounded cursor-pointer bg-transparent border border-[#3d3d3d]" /></Row>
+      </div>
+      <Row label="Mix"><input type="checkbox" checked={mix} onChange={(e) => setMix(e.target.checked)} className="accent-[#4c8bf5]" /></Row>
+      <p className="text-[9px] text-[#555]">{total} nucleons · A={total}, Z={protons}</p>
+      <button onClick={create} disabled={total < 1}
+        className="w-full mt-1 py-1.5 rounded bg-[#3a2a2a] border border-[#5a3a3a] text-[#e99] text-[10px] font-medium hover:bg-[#403030] transition disabled:opacity-40">
+        Generate Nucleus
+      </button>
+    </div>
+  )
+}
+
 function ParticlesTab() {
   const { addLayer, addGroup, addToGroup, incrementCounter } = useStore()
   const [count, setCount] = useState(200)
@@ -255,11 +346,25 @@ function ParticlesTab() {
 
 // ===== LAYERS LIST PANEL (bottom, scrollable) =====
 function LayersListPanel() {
-  const { layers, groups, selectedId, selectedGroupId, setSelected, selectGroup, updateLayer, addGroup, toggleGroupCollapse, addToGroup, removeFromGroup, removeGroup, renameGroup } = useStore()
-  const [dragTarget, setDragTarget] = useState(null)
+  const { layers, groups, selectedId, selectedGroupId, addGroup, setGroupParent, removeFromGroup } = useStore()
+  const [dragItem, setDragItem] = useState(null) // { type: 'layer'|'group', id }
 
   const groupedIds = new Set(groups.flatMap(g => g.children))
   const ungrouped = layers.filter(l => !groupedIds.has(l.id))
+  const rootGroups = groups.filter(g => !g.parentId)
+
+  // Dropping on the empty list area un-nests: groups become roots, layers leave
+  // their group.
+  const handleRootDrop = (e) => {
+    e.preventDefault()
+    if (!dragItem) return
+    if (dragItem.type === 'group') setGroupParent(dragItem.id, null)
+    else {
+      const parent = groups.find(g => g.children.includes(dragItem.id))
+      if (parent) removeFromGroup(parent.id, dragItem.id)
+    }
+    setDragItem(null)
+  }
 
   return (
     <div className="flex-1 min-h-0 bg-[#252525] border border-[#3d3d3d] rounded-lg shadow-xl overflow-hidden flex flex-col">
@@ -273,19 +378,17 @@ function LayersListPanel() {
           </button>
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
-        {/* Groups */}
-        {groups.map(group => (
-          <GroupItem key={group.id} group={group} layers={layers} selectedId={selectedId}
-            selectedGroupId={selectedGroupId} selectGroup={selectGroup}
-            setSelected={setSelected} updateLayer={updateLayer} toggleGroupCollapse={toggleGroupCollapse}
-            removeFromGroup={removeFromGroup} removeGroup={removeGroup} renameGroup={renameGroup}
-            dragTarget={dragTarget} setDragTarget={setDragTarget} addToGroup={addToGroup} />
+      <div className="flex-1 overflow-y-auto p-2 space-y-0.5" onDragOver={(e) => e.preventDefault()} onDrop={handleRootDrop}>
+        {/* Root groups (each renders its nested subgroups + layers recursively) */}
+        {rootGroups.map(group => (
+          <GroupItem key={group.id} group={group} groups={groups} layers={layers}
+            selectedId={selectedId} selectedGroupId={selectedGroupId}
+            dragItem={dragItem} setDragItem={setDragItem} depth={0} />
         ))}
-        {/* Ungrouped */}
+        {/* Ungrouped layers */}
         {ungrouped.map(layer => (
-          <LayerItem key={layer.id} layer={layer} selectedId={selectedId} setSelected={setSelected}
-            updateLayer={updateLayer} onDragStart={() => setDragTarget(layer.id)} onDragEnd={() => setDragTarget(null)} />
+          <LayerItem key={layer.id} layer={layer} selectedId={selectedId}
+            dragItem={dragItem} setDragItem={setDragItem} />
         ))}
         {layers.length === 0 && <p className="text-[#555] text-[10px] text-center py-4">No objects</p>}
       </div>
@@ -293,21 +396,39 @@ function LayersListPanel() {
   )
 }
 
-function GroupItem({ group, layers, selectedId, selectedGroupId, selectGroup, setSelected, updateLayer, toggleGroupCollapse, removeFromGroup, removeGroup, renameGroup, dragTarget, setDragTarget, addToGroup }) {
+function GroupItem({ group, groups, layers, selectedId, selectedGroupId, dragItem, setDragItem, depth }) {
+  const { selectGroup, setSelected, updateLayer, toggleGroupCollapse, removeFromGroup, removeGroup, renameGroup, addToGroup, setGroupParent } = useStore()
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState(group.name)
+  const [dragOver, setDragOver] = useState(false)
   const children = group.children.map(id => layers.find(l => l.id === id)).filter(Boolean)
+  const subGroups = groups.filter(g => g.parentId === group.id)
   const isGroupSelected = selectedGroupId === group.id
+  const count = children.length + subGroups.length
 
-  const handleDrop = (e) => { e.preventDefault(); if (dragTarget) addToGroup(group.id, dragTarget) }
+  const handleDrop = (e) => {
+    e.preventDefault(); e.stopPropagation()
+    setDragOver(false)
+    if (!dragItem) return
+    if (dragItem.type === 'layer') addToGroup(group.id, dragItem.id)
+    else if (dragItem.id !== group.id) setGroupParent(dragItem.id, group.id) // store blocks cycles
+    setDragItem(null)
+  }
 
   return (
-    <div className={`rounded border mb-0.5 overflow-hidden ${isGroupSelected ? 'border-[#4c8bf5]/60' : 'border-[#333]'}`} onDragOver={(e) => e.preventDefault()} onDrop={handleDrop}>
+    <div className={`rounded border mb-0.5 overflow-hidden ${dragOver ? 'border-[#4c8bf5]' : isGroupSelected ? 'border-[#4c8bf5]/60' : 'border-[#333]'}`}
+      onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setDragOver(true) }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={handleDrop}>
       <div
+        draggable
+        onDragStart={(e) => { e.stopPropagation(); setDragItem({ type: 'group', id: group.id }) }}
+        onDragEnd={() => setDragItem(null)}
         className={`flex items-center gap-1 px-2 py-1 cursor-pointer transition ${isGroupSelected ? 'bg-[#4c8bf5]/15' : 'bg-[#2a2a2a] hover:bg-[#303030]'}`}
         onClick={() => selectGroup(group.id)}
       >
-        <button onClick={() => toggleGroupCollapse(group.id)} className="text-[#777] text-[8px] w-3">{group.collapsed ? '▶' : '▼'}</button>
+        <button onClick={(e) => { e.stopPropagation(); toggleGroupCollapse(group.id) }} className="text-[#777] text-[8px] w-3">{group.collapsed ? '▶' : '▼'}</button>
+        <svg width="10" height="10" viewBox="0 0 12 12" fill="none" className="shrink-0 text-[#888]"><rect x="1" y="3" width="10" height="7" rx="1" stroke="currentColor" strokeWidth="1"/><path d="M3 3V2a1 1 0 011-1h4a1 1 0 011 1v1" stroke="currentColor" strokeWidth="1"/></svg>
         {editing ? (
           <input value={name} onChange={(e) => setName(e.target.value)}
             onBlur={() => { renameGroup(group.id, name); setEditing(false) }}
@@ -316,25 +437,34 @@ function GroupItem({ group, layers, selectedId, selectedGroupId, selectGroup, se
         ) : (
           <span className="flex-1 text-[10px] text-[#bbb] truncate" onDoubleClick={() => setEditing(true)}>{group.name}</span>
         )}
-        <span className="text-[8px] text-[#555]">{children.length}</span>
-        <button onClick={() => removeGroup(group.id)} className="text-[#444] hover:text-[#e88] text-[8px]">✕</button>
+        <span className="text-[8px] text-[#555]">{count}</span>
+        <button onClick={(e) => { e.stopPropagation(); removeGroup(group.id) }} className="text-[#444] hover:text-[#e88] text-[8px]">✕</button>
       </div>
       {!group.collapsed && (
         <div className="pl-3 pr-1 py-0.5 bg-[#272727]">
+          {/* Nested subgroups first */}
+          {subGroups.map(sg => (
+            <GroupItem key={sg.id} group={sg} groups={groups} layers={layers}
+              selectedId={selectedId} selectedGroupId={selectedGroupId}
+              dragItem={dragItem} setDragItem={setDragItem} depth={depth + 1} />
+          ))}
+          {/* Then this group's own layers */}
           {children.map(layer => (
             <div key={layer.id} className="flex items-center">
-              <div className="flex-1"><LayerItem layer={layer} selectedId={selectedId} setSelected={setSelected} updateLayer={updateLayer} /></div>
+              <div className="flex-1"><LayerItem layer={layer} selectedId={selectedId} dragItem={dragItem} setDragItem={setDragItem} /></div>
               <button onClick={() => removeFromGroup(group.id, layer.id)} className="text-[#444] hover:text-[#888] text-[7px] px-0.5">✕</button>
             </div>
           ))}
-          {children.length === 0 && <p className="text-[#444] text-[9px] py-1.5 text-center">Drop here</p>}
+          {count === 0 && <p className="text-[#444] text-[9px] py-1.5 text-center">Drop objects or groups here</p>}
         </div>
       )}
     </div>
   )
 }
 
-function LayerItem({ layer, selectedId, setSelected, updateLayer, onDragStart, onDragEnd }) {
+function LayerItem({ layer, selectedId, dragItem, setDragItem }) {
+  const setSelected = useStore(s => s.setSelected)
+  const updateLayer = useStore(s => s.updateLayer)
   const selectedIds = useStore(s => s.selectedIds)
   const addToSelection = useStore(s => s.addToSelection)
   const isSelected = selectedIds.includes(layer.id)
@@ -348,7 +478,9 @@ function LayerItem({ layer, selectedId, setSelected, updateLayer, onDragStart, o
   }
 
   return (
-    <div draggable={!!onDragStart} onDragStart={onDragStart} onDragEnd={onDragEnd}
+    <div draggable
+      onDragStart={(e) => { e.stopPropagation(); setDragItem?.({ type: 'layer', id: layer.id }) }}
+      onDragEnd={() => setDragItem?.(null)}
       onClick={handleClick}
       className={`flex items-center gap-1.5 px-1.5 py-1 rounded cursor-pointer text-[10px] transition ${
         isSelected ? 'bg-[#4c8bf5]/20 text-white' : 'hover:bg-[#2f2f2f] text-[#999]'

@@ -16,23 +16,48 @@ export default function ConfigPanel() {
     snapToGrid, setSnapToGrid,
     gridSnap, setGridSnap,
     orbitalMode, setOrbitalMode,
+    quality, setQuality,
+    smoothShapes, setSmoothShapes,
   } = useStore()
 
   if (!configOpen) return null
 
   return (
-    <div className="absolute top-12 left-1/2 -translate-x-1/2 w-72 bg-[#252525] border border-[#3d3d3d] rounded-lg shadow-xl z-[200] overflow-hidden">
+    <div className="absolute top-12 left-1/2 -translate-x-1/2 w-[min(18rem,calc(100vw-1rem))] max-h-[calc(100dvh-4.5rem)] overflow-y-auto bg-[#252525] border border-[#3d3d3d] rounded-lg shadow-xl z-[200]">
       <div className="flex items-center justify-between px-3 py-2 border-b border-[#3d3d3d]">
         <span className="text-[11px] text-[#888] uppercase tracking-wider font-medium">Graphics</span>
         <button onClick={toggleConfig} className="text-[#666] hover:text-white text-xs transition">✕</button>
       </div>
 
       <div className="p-3 space-y-3">
+        {/* Quality presets + shape smoothness toggle */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-[#999]">Quality</span>
+            <div className="flex gap-0.5 bg-[#1e1e1e] rounded p-0.5 border border-[#3d3d3d]">
+              {['low', 'medium', 'high'].map((q) => (
+                <button key={q} onClick={() => setQuality(q)}
+                  className={`px-2 py-0.5 rounded text-[9px] transition ${quality === q ? 'bg-[#4c8bf5] text-white' : 'text-[#999] hover:text-white'}`}>
+                  {q === 'low' ? 'Low' : q === 'medium' ? 'Med' : 'High'}
+                </button>
+              ))}
+              <span className={`px-2 py-0.5 rounded text-[9px] ${quality === 'custom' ? 'bg-[#7a5acc] text-white' : 'text-[#555]'}`}>Custom</span>
+            </div>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-[#999]">Smooth shapes</span>
+            <Toggle on={smoothShapes} onClick={() => setSmoothShapes(!smoothShapes)} />
+          </div>
+          <p className="text-[8px] text-[#555]">Off = faster, more polygonal. On = smoother spheres &amp; orbitals.</p>
+        </div>
+
+        <div className="pt-2 border-t border-[#333] space-y-3">
         <Slider label="Bloom Strength" value={bloomStrength} onChange={setBloomStrength} min={0} max={3} step={0.1} />
         <Slider label="Bloom Radius" value={bloomRadius} onChange={setBloomRadius} min={0} max={2} step={0.1} />
         <Slider label="Bloom Threshold" value={bloomThreshold} onChange={setBloomThreshold} min={0} max={1} step={0.05} />
         <Slider label="Emissive" value={emissiveIntensity} onChange={setEmissiveIntensity} min={0} max={1} step={0.05} />
         <Slider label="Exposure" value={exposure} onChange={setExposure} min={0.5} max={3} step={0.1} />
+        </div>
 
         <div className="flex items-center justify-between pt-2 border-t border-[#333]">
           <span className="text-[10px] text-[#999]">Background</span>
@@ -96,6 +121,15 @@ export default function ConfigPanel() {
         </div>
       </div>
     </div>
+  )
+}
+
+function Toggle({ on, onClick }) {
+  return (
+    <button onClick={onClick} role="switch" aria-checked={on}
+      className={`relative w-9 h-5 rounded-full transition-colors ${on ? 'bg-[#4c8bf5]' : 'bg-[#3d3d3d]'}`}>
+      <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${on ? 'left-[18px]' : 'left-0.5'}`} />
+    </button>
   )
 }
 

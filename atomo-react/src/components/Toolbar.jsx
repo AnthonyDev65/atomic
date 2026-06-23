@@ -9,6 +9,7 @@ export default function Toolbar() {
     quality, setQuality, openViewerSetup, viewerMode,
     transformMode, setTransformMode, layers, groups, clearLayers,
     toggleShare, toggleTimeline, timelineOpen,
+    leftPanelOpen, rightPanelOpen,
   } = useStore()
   const fileInputRef = useRef(null)
 
@@ -78,7 +79,7 @@ export default function Toolbar() {
 
       <Divider />
 
-      <ToolBtn onClick={toggleLeftPanel} title="Panel izquierdo">
+      <ToolBtn onClick={toggleLeftPanel} active={leftPanelOpen} title="Panel izquierdo">
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="2" width="4" height="10" rx="1" stroke="currentColor" strokeWidth="1.2"/><rect x="7" y="2" width="6" height="10" rx="1" stroke="currentColor" strokeWidth="1.2" opacity="0.4"/></svg>
       </ToolBtn>
 
@@ -139,7 +140,7 @@ export default function Toolbar() {
 
       <Divider />
 
-      <ToolBtn onClick={toggleRightPanel} title="Panel derecho">
+      <ToolBtn onClick={toggleRightPanel} active={rightPanelOpen} title="Panel derecho">
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="2" width="6" height="10" rx="1" stroke="currentColor" strokeWidth="1.2" opacity="0.4"/><rect x="9" y="2" width="4" height="10" rx="1" stroke="currentColor" strokeWidth="1.2"/></svg>
       </ToolBtn>
     </div>

@@ -26,9 +26,28 @@ import * as THREE from 'three'
 // Registry to store mesh refs by layer id — exported for WaveSphere
 export const meshRegistry = new Map()
 
-// Group lookup maps, rebuilt each render: layerId -> groupId, and groupId -> pivot center.
+// Camera layer for crisp, post-processing-free overlay content (gizmos, axes).
+// Must match GIZMO_LAYER in Bloom.jsx.
+export const OVERLAY_LAYER = 2
+
+// Group lookup maps, rebuilt each render: layerId -> immediate groupId,
+// groupId -> recursive-subtree pivot center, groupId -> group object.
 export const groupOfLayer = new Map()
 export const groupPivots = new Map()
+export const groupById = new Map()
+
+// All layer ids contained in a group, including those in nested subgroups.
+function descendantLayerIds(groups, groupId) {
+  const out = []
+  const walk = (gid) => {
+    const g = groups.find(x => x.id === gid)
+    if (!g) return
+    g.children.forEach(id => out.push(id))
+    groups.forEach(x => { if (x.parentId === gid) walk(x.id) })
+  }
+  walk(groupId)
+  return out
+}
 
 // --- Shared caches (avoid recreating identical textures/geometries per object) ---
 // A heavy nucleus has hundreds of identical 'P'/'N' spheres; caching collapses
@@ -147,29 +166,41 @@ export default function SceneContent({ orbitRef }) {
   const viewerMode = useStore(s => s.viewerMode)
   const groups = useStore(s => s.groups)
 
-  // Rebuild group maps (layer→group and group→pivot center of base positions)
+  // Rebuild group maps. Pivots use the recursive descendant centroid so a
+  // parent group rotates/moves around the center of its whole subtree.
   useMemo(() => {
-    groupOfLayer.clear(); groupPivots.clear()
+    groupOfLayer.clear(); groupPivots.clear(); groupById.clear()
     groups.forEach(g => {
-      const kids = g.children.map(id => layers.find(l => l.id === id)).filter(Boolean)
-      if (!kids.length) return
-      let cx = 0, cy = 0, cz = 0
-      kids.forEach(l => { const p = l.position || [0, 0, 0]; cx += p[0]; cy += p[1]; cz += p[2] })
-      groupPivots.set(g.id, [cx / kids.length, cy / kids.length, cz / kids.length])
+      groupById.set(g.id, g)
       g.children.forEach(id => groupOfLayer.set(id, g.id))
+    })
+    const layerById = new Map(layers.map(l => [l.id, l]))
+    groups.forEach(g => {
+      const ids = descendantLayerIds(groups, g.id)
+      let cx = 0, cy = 0, cz = 0, n = 0
+      ids.forEach(id => { const l = layerById.get(id); if (!l) return; const p = l.position || [0, 0, 0]; cx += p[0]; cy += p[1]; cz += p[2]; n++ })
+      groupPivots.set(g.id, n ? [cx / n, cy / n, cz / n] : [0, 0, 0])
     })
   }, [layers, groups])
 
   const selectedMesh = selectedId ? meshRegistry.get(selectedId) : null
 
-  // Group pivot: invisible object at group center
+  // Group gizmo pivots around the whole subtree, so pass all descendant layers.
   const selectedGroup = groups.find(g => g.id === selectedGroupId)
-  const groupChildren = selectedGroup ? selectedGroup.children.map(id => layers.find(l => l.id === id)).filter(Boolean) : []
+  const groupChildren = selectedGroup
+    ? descendantLayerIds(groups, selectedGroup.id).map(id => layers.find(l => l.id === id)).filter(Boolean)
+    : []
 
   return (
     <>
       <TimelineDriver />
-      {showAxes && !viewerMode && <axesHelper args={[2]} />}
+      {/* Axes are tagged noBloom (drawn crisp on top in Bloom's overlay pass,
+          unaffected by post-processing) and lifted a hair above y=0 so they
+          never z-fight with the grid lines they cross. */}
+      {showAxes && !viewerMode && (
+        <axesHelper args={[2]} position={[0, 0.004, 0]}
+          ref={(o) => { if (o) { o.userData.noBloom = true; o.layers.enable(OVERLAY_LAYER) } }} />
+      )}
       {showGrid && !viewerMode && <gridHelper args={[gridSize, gridDivisions, '#333333', '#222222']} />}
       {layers.map((layer) => (
         layer.type === 'particles'
@@ -198,9 +229,18 @@ function TimelineDriver() {
   const invalidate = useThree(s => s.invalidate)
   const camera = useThree(s => s.camera)
   const controls = useThree(s => s.controls)
+  const gl = useThree(s => s.gl)
   const playing = useStore(s => s.timeline.playing)
 
   useEffect(() => { invalidateRef.current = invalidate }, [invalidate])
+
+  // Pressing anywhere on the 3D canvas dismisses the Graphics menu.
+  useEffect(() => {
+    const el = gl.domElement
+    const onDown = () => { if (useStore.getState().configOpen) useStore.getState().closeConfig() }
+    el.addEventListener('pointerdown', onDown)
+    return () => el.removeEventListener('pointerdown', onDown)
+  }, [gl])
 
   // Frame all scene objects: fit the camera to their bounding sphere and aim
   // the orbit pivot at their center. Falls back to the default view if empty.
@@ -421,9 +461,12 @@ function SceneObject({ layer }) {
     const m = meshRef.current
     if (!m) return
     const kf = layer.keyframes
-    const gid = groupOfLayer.get(layer.id)
-    const group = gid ? useStore.getState().groups.find(g => g.id === gid) : null
-    const groupAnimated = !!group && !!(group.keyframes || group.position || group.rotation || group.opacity != null)
+    // Chain of groups affecting this layer, innermost → outermost (so a parent
+    // group's move/rotation propagates down to nested groups and their layers).
+    const chain = []
+    let cg = groupById.get(groupOfLayer.get(layer.id))
+    while (cg) { chain.push(cg); cg = cg.parentId ? groupById.get(cg.parentId) : null }
+    const groupAnimated = chain.some(g => g.keyframes || g.position || g.rotation || g.opacity != null)
 
     // Fast path: nothing animated → continuous spin (if any) and bail
     if (!kf && !layer.orbital && !layer.share && !groupAnimated) {
@@ -509,18 +552,23 @@ function SceneObject({ layer }) {
       }
     }
 
-    // Group transform: rotate/translate around the group pivot, multiply opacity
+    // Group transforms: apply each group in the chain (innermost first) as a
+    // rotate/translate around that group's pivot, accumulating rotation and
+    // multiplying opacity. A parent group thus carries its nested children.
     if (groupAnimated) {
-      const pivot = groupPivots.get(gid) || [0, 0, 0]
-      const gp = group.keyframes?.position?.length ? sampleProp(group.keyframes.position, t) : (group.position || [0, 0, 0])
-      const gr = group.keyframes?.rotation?.length ? sampleProp(group.keyframes.rotation, t) : (group.rotation || [0, 0, 0])
-      const go = group.keyframes?.opacity?.length ? sampleProp(group.keyframes.opacity, t) : group.opacity
-      const gQ = new THREE.Quaternion().setFromEuler(new THREE.Euler(gr[0], gr[1], gr[2]))
-      const off = new THREE.Vector3(lp[0] - pivot[0], lp[1] - pivot[1], lp[2] - pivot[2]).applyQuaternion(gQ)
-      lp = [pivot[0] + off.x + (gp[0] || 0), pivot[1] + off.y + (gp[1] || 0), pivot[2] + off.z + (gp[2] || 0)]
-      const lQ = new THREE.Quaternion().setFromEuler(new THREE.Euler(lr[0], lr[1], lr[2]))
-      m.quaternion.copy(gQ.multiply(lQ))
-      if (go != null) { lo *= go; opacityDriven = true }
+      const accQ = new THREE.Quaternion().setFromEuler(new THREE.Euler(lr[0], lr[1], lr[2]))
+      for (const g of chain) {
+        const pivot = groupPivots.get(g.id) || [0, 0, 0]
+        const gp = g.keyframes?.position?.length ? sampleProp(g.keyframes.position, t) : (g.position || [0, 0, 0])
+        const gr = g.keyframes?.rotation?.length ? sampleProp(g.keyframes.rotation, t) : (g.rotation || [0, 0, 0])
+        const go = g.keyframes?.opacity?.length ? sampleProp(g.keyframes.opacity, t) : g.opacity
+        const gQ = new THREE.Quaternion().setFromEuler(new THREE.Euler(gr[0], gr[1], gr[2]))
+        const off = new THREE.Vector3(lp[0] - pivot[0], lp[1] - pivot[1], lp[2] - pivot[2]).applyQuaternion(gQ)
+        lp = [pivot[0] + off.x + (gp[0] || 0), pivot[1] + off.y + (gp[1] || 0), pivot[2] + off.z + (gp[2] || 0)]
+        accQ.premultiply(gQ)
+        if (go != null) { lo *= go; opacityDriven = true }
+      }
+      m.quaternion.copy(accQ)
     } else {
       m.rotation.set(lr[0], lr[1], lr[2])
     }
@@ -582,7 +630,11 @@ const GeometryMemo = memo(function GeometryInner({ layer }) {
   const tt = layer.tubeThickness || 0.1
   const quality = useStore(s => s.quality)
   const isLowEnd = useStore(s => s.isLowEnd)
-  const effectiveQ = isLowEnd && quality === 'high' ? 'medium' : quality
+  const smoothShapes = useStore(s => s.smoothShapes)
+  // Mesh tessellation is driven by the Smooth-shapes toggle (decoupled from the
+  // bloom/exposure quality preset): off → low-poly, on → smooth (high on
+  // capable devices at the high preset, medium otherwise).
+  const effectiveQ = !smoothShapes ? 'low' : (quality === 'high' && !isLowEnd) ? 'high' : 'medium'
 
   // Procedural tube orbitals stay as components (few of them, varied params)
   switch (layer.type) {

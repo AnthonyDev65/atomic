@@ -6,7 +6,8 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import * as THREE from 'three'
 import { useStore } from '../store/useStore'
 
-// Dedicated layer for rendering gizmos on top, unaffected by post-processing.
+// Dedicated layer for rendering overlay content (gizmos, axes) on top,
+// unaffected by post-processing. Must match OVERLAY_LAYER in SceneContent.jsx.
 const GIZMO_LAYER = 2
 
 export default function BloomEffect() {
@@ -49,29 +50,32 @@ export default function BloomEffect() {
     if (composerRef.current) composerRef.current.setSize(size.width, size.height)
   }, [size])
 
-  // Override render. Gizmos (TransformControls) must NOT receive bloom, so we
-  // hide them during the post-processed pass, then draw them crisp on top in a
-  // dedicated overlay layer.
+  // Override render. Overlay content — TransformControls gizmos and axes
+  // (tagged userData.noBloom) — must NOT receive bloom, so we hide it during
+  // the post-processed pass, then draw it crisp on top in a dedicated layer.
   useFrame(() => {
     const composer = composerRef.current
     if (!composer) return
 
-    // Collect gizmo helper roots (type set by three.js, survives minification)
-    const gizmos = []
-    scene.traverse(o => { if (o.type === 'TransformControlsGizmo') gizmos.push(o) })
+    // Collect overlay roots: gizmos (type set by three.js, survives
+    // minification) plus anything explicitly tagged to skip post-processing.
+    const overlay = []
+    scene.traverse(o => { if (o.type === 'TransformControlsGizmo' || o.userData?.noBloom) overlay.push(o) })
 
-    // 1) Post-processed scene without gizmos. Reset camera layers FIRST so the
-    //    composer always sees the scene (defends against a stuck overlay layer).
+    // 1) Post-processed scene without overlay content. Reset camera layers
+    //    FIRST so the composer always sees the scene (defends against a stuck
+    //    overlay layer).
     camera.layers.set(0)
-    gizmos.forEach(g => { g.visible = false })
+    overlay.forEach(o => { o.visible = false })
     composer.render()
-    if (!gizmos.length) return
+    overlay.forEach(o => { o.visible = true })
+    if (!overlay.length) return
 
-    // 2) Crisp overlay of just the gizmos, bypassing bloom.
+    // 2) Crisp overlay pass, bypassing bloom and drawn on top (depth cleared).
     //    scene.background must be cleared first: a Color background triggers a
     //    forced screen clear inside gl.render() even with autoClear off, which
-    //    would erase the post-processed scene and leave only the gizmo.
-    gizmos.forEach(g => { g.visible = true; g.traverse(c => c.layers.enable(GIZMO_LAYER)) })
+    //    would erase the post-processed scene and leave only the overlay.
+    overlay.forEach(o => o.traverse(c => c.layers.enable(GIZMO_LAYER)))
     const prevAutoClear = gl.autoClear
     const prevBg = scene.background
     try {

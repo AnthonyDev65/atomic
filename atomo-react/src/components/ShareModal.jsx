@@ -61,8 +61,8 @@ export default function ShareModal({ onClose }) {
   }
 
   return (
-    <div className="absolute inset-0 z-[300] flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="w-96 bg-[#252525] border border-[#3d3d3d] rounded-xl shadow-2xl overflow-hidden">
+    <div className="absolute inset-0 z-[300] flex items-center justify-center p-3 bg-black/50 backdrop-blur-sm">
+      <div className="w-[min(24rem,100%)] max-h-[calc(100dvh-2rem)] overflow-y-auto bg-[#252525] border border-[#3d3d3d] rounded-xl shadow-2xl">
         <div className="flex items-center justify-between px-4 py-3 border-b border-[#3d3d3d]">
           <span className="text-white text-sm font-medium">Share Model</span>
           <button onClick={onClose} className="text-[#666] hover:text-white transition">✕</button>

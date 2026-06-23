@@ -1,10 +1,22 @@
-import { Canvas } from '@react-three/fiber'
+import { Canvas, useFrame } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { useStore } from '../store/useStore'
 import SceneContent from './SceneContent'
 import CameraGizmo from './CameraGizmo'
 import BloomEffect from './Bloom'
 import { useRef, useMemo } from 'react'
+
+// Renders the main scene each frame when BloomEffect is absent (low-end). The
+// CameraGizmo's <GizmoHelper renderPriority> takes over R3F's render loop, which
+// disables automatic rendering — so without an explicit renderer the main scene
+// never draws (only the gizmo shows). Priority 1 puts this before the gizmo (2).
+function PlainRenderer() {
+  useFrame(({ gl, scene, camera }) => {
+    gl.autoClear = true
+    gl.render(scene, camera)
+  }, 1)
+  return null
+}
 
 // Export orbit ref so TransformControls can disable it
 export let orbitControlsRef = { current: null }
@@ -14,16 +26,22 @@ export default function Scene() {
   const exposure = useStore(s => s.exposure)
   const orbitRef = useRef()
 
-  // Detect low-end device
+  // Detect low-end device. Note: navigator.deviceMemory is undefined on
+  // Safari/Firefox/iPad — only treat it as a signal when it actually exists,
+  // otherwise capable devices get wrongly downgraded.
+  const isMobile = useMemo(() => /Android|iPhone|iPad|iPod/i.test(navigator.userAgent), [])
   const isLowEnd = useMemo(() => {
-    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
-    const cores = navigator.hardwareConcurrency || 2
-    const memory = navigator.deviceMemory || 2
-    return isMobile || cores <= 2 || memory <= 2
-  }, [])
+    const cores = navigator.hardwareConcurrency || 4
+    const mem = navigator.deviceMemory
+    return isMobile || cores <= 2 || (mem != null && mem <= 2)
+  }, [isMobile])
 
   const dpr = isLowEnd ? [0.5, 1] : [1, 2]
-  const frameloop = isLowEnd ? 'demand' : 'always'
+  // Always render. 'demand' froze the scene on several devices (it can paint a
+  // single early frame before layout/orientation settles, then never redraw —
+  // leaving only the static grid / camera gizmo). The other low-end savings
+  // (lower dpr, no bloom, reduced geometry) are kept.
+  const frameloop = 'always'
 
   return (
     <Canvas
@@ -59,7 +77,7 @@ export default function Scene() {
 
       <CameraGizmo />
 
-      {!isLowEnd && <BloomEffect />}
+      {isLowEnd ? <PlainRenderer /> : <BloomEffect />}
     </Canvas>
   )
 }

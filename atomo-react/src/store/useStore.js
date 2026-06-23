@@ -1,5 +1,44 @@
 import { create } from 'zustand'
 
+// Detected once: weak GPUs/mobiles default to faster, lower-detail rendering.
+// deviceMemory is undefined on Safari/Firefox/iPad — only use it when present
+// so capable devices aren't wrongly downgraded.
+const LOW_END = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+  (navigator.hardwareConcurrency || 4) <= 2 ||
+  (navigator.deviceMemory != null && navigator.deviceMemory <= 2)
+
+// Narrow screens (phones): the docked left panel would cover the whole canvas,
+// so it starts collapsed — the user opens it from the toolbar when needed.
+const IS_NARROW = typeof window !== 'undefined' && window.innerWidth < 768
+
+// Walk a group's subtree. Returns every descendant layer id and group id
+// (including the group itself), so nested groups behave as one unit for
+// move / delete / duplicate.
+function descendantsOf(groups, groupId) {
+  const layerIds = []
+  const groupIds = []
+  const walk = (gid) => {
+    const g = groups.find(x => x.id === gid)
+    if (!g) return
+    groupIds.push(gid)
+    ;(g.children || []).forEach(id => layerIds.push(id))
+    groups.forEach(x => { if (x.parentId === gid) walk(x.id) })
+  }
+  walk(groupId)
+  return { layerIds, groupIds }
+}
+
+// True if `maybeAncestor` is `groupId` or any group above it — used to block
+// parenting cycles when nesting groups.
+function isAncestor(groups, groupId, maybeAncestor) {
+  let g = groups.find(x => x.id === groupId)
+  while (g) {
+    if (g.id === maybeAncestor) return true
+    g = g.parentId ? groups.find(x => x.id === g.parentId) : null
+  }
+  return false
+}
+
 export const useStore = create((set, get) => ({
   // Layers & objects
   layers: [],
@@ -14,8 +53,8 @@ export const useStore = create((set, get) => ({
   moveAxis: null,
   transformMode: 'select', // 'select' | 'translate' | 'rotate' | 'scale'
 
-  // Panels
-  leftPanelOpen: true,
+  // Panels (left starts collapsed on phones so the canvas is visible on load)
+  leftPanelOpen: !IS_NARROW,
   rightPanelOpen: true,
   scriptOpen: false,
   configOpen: false,
@@ -30,9 +69,11 @@ export const useStore = create((set, get) => ({
   gridSnap: 0.5,
   orbitalMode: 'simple', // 'simple' (wireframe paths) | 'full' (solid shapes)
   quality: 'medium',
-  isLowEnd: /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
-    (navigator.hardwareConcurrency || 4) <= 2 ||
-    (navigator.deviceMemory || 4) <= 2,
+  isLowEnd: LOW_END,
+  // Smooth (high-segment) shape tessellation. Off = faster but polygonal.
+  // Defaults off on low-end devices; quality presets toggle it, and changing
+  // it manually drops quality into 'custom'.
+  smoothShapes: !LOW_END,
   bloomStrength: 1.2,
   bloomRadius: 0.4,
   bloomThreshold: 0.1,
@@ -67,16 +108,19 @@ export const useStore = create((set, get) => ({
   toggleRightPanel: () => set((s) => ({ rightPanelOpen: !s.rightPanelOpen })),
   toggleScript: () => set((s) => ({ scriptOpen: !s.scriptOpen })),
   toggleConfig: () => set((s) => ({ configOpen: !s.configOpen })),
+  closeConfig: () => set({ configOpen: false }),
   toggleShare: () => set((s) => ({ shareOpen: !s.shareOpen })),
   setQuality: (q) => {
     const presets = {
-      low: { bloomStrength: 0.3, bloomRadius: 0.2, bloomThreshold: 0.6, emissiveIntensity: 0.1, exposure: 1.0 },
-      medium: { bloomStrength: 1.5, bloomRadius: 0.5, bloomThreshold: 0.1, emissiveIntensity: 0.5, exposure: 1.4 },
-      high: { bloomStrength: 3.0, bloomRadius: 0.5, bloomThreshold: 0.1, emissiveIntensity: 0.6, exposure: 1.8 },
+      low: { bloomStrength: 0.3, bloomRadius: 0.2, bloomThreshold: 0.6, emissiveIntensity: 0.1, exposure: 1.0, smoothShapes: false },
+      medium: { bloomStrength: 1.5, bloomRadius: 0.5, bloomThreshold: 0.1, emissiveIntensity: 0.5, exposure: 1.4, smoothShapes: true },
+      high: { bloomStrength: 3.0, bloomRadius: 0.5, bloomThreshold: 0.1, emissiveIntensity: 0.6, exposure: 1.8, smoothShapes: true },
     }
     if (presets[q]) set({ quality: q, ...presets[q] })
     else set({ quality: q })
   },
+  // Toggling shape smoothness is a custom tweak, like the individual sliders.
+  setSmoothShapes: (v) => set({ smoothShapes: v, quality: 'custom' }),
   setTransformMode: (mode) => set({ transformMode: mode }),
   setBloomStrength: (v) => set({ bloomStrength: v, quality: 'custom' }),
   setBloomRadius: (v) => set({ bloomRadius: v, quality: 'custom' }),
@@ -149,31 +193,44 @@ export const useStore = create((set, get) => ({
   })),
 
   // Groups
-  groups: [], // { id, name, children: [layerId], collapsed: bool }
-  addGroup: (name) => {
+  groups: [], // { id, name, children: [layerId], collapsed: bool, parentId?: groupId }
+  addGroup: (name, parentId) => {
     const id = crypto.randomUUID()
-    set((s) => ({ groups: [...s.groups, { id, name, children: [], collapsed: false }] }))
+    set((s) => ({ groups: [...s.groups, { id, name, children: [], collapsed: false, parentId: parentId || undefined }] }))
     return id
   },
   removeGroup: (id) => set((s) => {
-    const group = s.groups.find(g => g.id === id)
-    const childIds = group ? group.children : []
+    const { layerIds, groupIds } = descendantsOf(s.groups, id)
+    const layerSet = new Set(layerIds)
+    const groupSet = new Set(groupIds)
     return {
-      groups: s.groups.filter(g => g.id !== id),
-      layers: s.layers.filter(l => !childIds.includes(l.id)),
-      selectedId: childIds.includes(s.selectedId) ? null : s.selectedId,
-      selectedGroupId: s.selectedGroupId === id ? null : s.selectedGroupId,
+      groups: s.groups.filter(g => !groupSet.has(g.id)),
+      layers: s.layers.filter(l => !layerSet.has(l.id)),
+      selectedId: layerSet.has(s.selectedId) ? null : s.selectedId,
+      selectedGroupId: groupSet.has(s.selectedGroupId) ? null : s.selectedGroupId,
     }
   }),
   toggleGroupCollapse: (id) => set((s) => ({
     groups: s.groups.map(g => g.id === id ? { ...g, collapsed: !g.collapsed } : g)
   })),
+  // Move a layer into a group (Figma-style): strip it from any group it was in,
+  // then add to the target.
   addToGroup: (groupId, layerId) => set((s) => ({
-    groups: s.groups.map(g => g.id === groupId ? { ...g, children: [...g.children.filter(c => c !== layerId), layerId] } : g)
+    groups: s.groups.map(g => {
+      const without = g.children.filter(c => c !== layerId)
+      return g.id === groupId ? { ...g, children: [...without, layerId] } : { ...g, children: without }
+    })
   })),
   removeFromGroup: (groupId, layerId) => set((s) => ({
     groups: s.groups.map(g => g.id === groupId ? { ...g, children: g.children.filter(c => c !== layerId) } : g)
   })),
+  // Nest a group under another (or pass null/undefined to make it a root group).
+  // Blocks cycles (can't parent a group to itself or one of its descendants).
+  setGroupParent: (groupId, parentId) => set((s) => {
+    if (groupId === parentId) return s
+    if (parentId && isAncestor(s.groups, parentId, groupId)) return s
+    return { groups: s.groups.map(g => g.id === groupId ? { ...g, parentId: parentId || undefined } : g) }
+  }),
   renameGroup: (id, name) => set((s) => ({
     groups: s.groups.map(g => g.id === id ? { ...g, name } : g)
   })),
@@ -208,8 +265,9 @@ export const useStore = create((set, get) => ({
   clearGroupKeyframes: (groupId) => set((s) => ({
     groups: s.groups.map(g => g.id === groupId ? { ...g, keyframes: undefined } : g)
   })),
-  // Duplicate a whole group: clones every child with fresh ids, remaps orbital
-  // parent / label parent references, deep-copies keyframes and group transform.
+  // Duplicate a whole group subtree: clones every descendant layer AND nested
+  // subgroup with fresh ids, remaps orbital/label/bond/share references plus
+  // group parent links, and deep-copies keyframes and transforms.
   duplicateGroup: (groupId) => {
     const s = get()
     const group = s.groups.find(g => g.id === groupId)
@@ -221,11 +279,18 @@ export const useStore = create((set, get) => ({
       return out
     }
     const offset = 0.3
-    const idMap = new Map()
-    const newLayers = group.children
-      .map(cid => s.layers.find(l => l.id === cid))
+    const { layerIds, groupIds } = descendantsOf(s.groups, groupId)
+
+    // Fresh ids for every cloned layer and group.
+    const idMap = new Map()        // old layer id -> new layer id
+    const groupIdMap = new Map()   // old group id -> new group id
+    layerIds.forEach(id => idMap.set(id, crypto.randomUUID()))
+    groupIds.forEach(id => groupIdMap.set(id, crypto.randomUUID()))
+
+    const newLayers = layerIds
+      .map(id => s.layers.find(l => l.id === id))
       .filter(Boolean)
-      .map(l => { const nid = crypto.randomUUID(); idMap.set(l.id, nid); return { ...l, id: nid } })
+      .map(l => ({ ...l, id: idMap.get(l.id) }))
     newLayers.forEach(nl => {
       const p = nl.position || [0, 0, 0]
       nl.position = [p[0] + offset, p[1] + offset, p[2]]
@@ -243,25 +308,34 @@ export const useStore = create((set, get) => ({
       if (nl.labelParentId && idMap.has(nl.labelParentId)) nl.labelParentId = idMap.get(nl.labelParentId)
       if (nl.keyframes) nl.keyframes = cloneKf(nl.keyframes)
     })
-    const newGroupId = crypto.randomUUID()
-    const newGroup = {
-      ...group,
-      id: newGroupId,
-      name: (group.name || 'Group') + '_copy',
-      collapsed: false,
-      children: newLayers.map(l => l.id),
-      keyframes: cloneKf(group.keyframes),
-      position: group.position ? [...group.position] : undefined,
-      rotation: group.rotation ? [...group.rotation] : undefined,
-    }
-    set(st => ({ layers: [...st.layers, ...newLayers], groups: [...st.groups, newGroup] }))
-    return newGroupId
+
+    const newGroups = groupIds
+      .map(id => s.groups.find(g => g.id === id))
+      .filter(Boolean)
+      .map(g => ({
+        ...g,
+        id: groupIdMap.get(g.id),
+        name: g.id === groupId ? (g.name || 'Group') + '_copy' : g.name,
+        collapsed: false,
+        children: g.children.map(cid => idMap.get(cid)).filter(Boolean),
+        // Top of the subtree stays a sibling of the original; inner groups
+        // re-link to their cloned parent.
+        parentId: g.id === groupId ? g.parentId : groupIdMap.get(g.parentId),
+        keyframes: cloneKf(g.keyframes),
+        position: g.position ? [...g.position] : undefined,
+        rotation: g.rotation ? [...g.rotation] : undefined,
+      }))
+
+    set(st => ({ layers: [...st.layers, ...newLayers], groups: [...st.groups, ...newGroups] }))
+    return groupIdMap.get(groupId)
   },
   moveGroup: (groupId, delta) => set((s) => {
     const group = s.groups.find(g => g.id === groupId)
     if (!group) return s
+    const { layerIds } = descendantsOf(s.groups, groupId)
+    const layerSet = new Set(layerIds)
     const newLayers = s.layers.map(l => {
-      if (group.children.includes(l.id)) {
+      if (layerSet.has(l.id)) {
         const pos = l.position || [0, 0, 0]
         return { ...l, position: [pos[0] + delta[0], pos[1] + delta[1], pos[2] + delta[2]] }
       }

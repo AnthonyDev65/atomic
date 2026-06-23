@@ -10,7 +10,7 @@ export default function ViewerSetup() {
   if (!viewerSetupOpen) return null
 
   return (
-    <div className="absolute top-12 left-1/2 -translate-x-1/2 w-80 bg-[#252525] border border-[#3d3d3d] rounded-lg shadow-xl z-[250] overflow-hidden">
+    <div className="absolute top-12 left-1/2 -translate-x-1/2 w-[min(20rem,calc(100vw-1rem))] max-h-[calc(100dvh-4.5rem)] overflow-y-auto bg-[#252525] border border-[#3d3d3d] rounded-lg shadow-xl z-[250]">
       <div className="flex items-center justify-between px-3 py-2 border-b border-[#3d3d3d]">
         <span className="text-[11px] text-[#888] uppercase tracking-wider font-medium">Viewer Setup</span>
         <button onClick={closeViewerSetup} className="text-[#666] hover:text-white text-xs transition">✕</button>

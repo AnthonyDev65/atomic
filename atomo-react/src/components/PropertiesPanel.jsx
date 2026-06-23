@@ -24,7 +24,7 @@ export default function PropertiesPanel() {
   const rot = layer.rotation || [0, 0, 0]
 
   return (
-    <div className="absolute top-12 right-2 md:right-3 w-60 md:w-64 max-h-[calc(100vh-70px)] overflow-y-auto bg-[#252525] border border-[#3d3d3d] rounded-lg shadow-xl z-40">
+    <div className="absolute top-12 right-2 md:right-3 w-[min(15rem,calc(100vw-1rem))] md:w-64 max-h-[calc(100dvh-4.5rem)] overflow-y-auto bg-[#252525] border border-[#3d3d3d] rounded-lg shadow-xl z-40">
       {/* Header */}
       <div className="sticky top-0 bg-[#252525] border-b border-[#3d3d3d] px-3 py-2.5 z-10">
         <div className="flex items-center justify-between">
