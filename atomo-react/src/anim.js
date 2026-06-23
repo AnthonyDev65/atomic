@@ -4,6 +4,21 @@
 // Canvas) can force a redraw while scrubbing on `frameloop='demand'` devices.
 export const invalidateRef = { current: null }
 
+// Recenters/resets the camera to the default framing. Set inside the Canvas
+// (TimelineDriver) so the Toolbar, which lives outside it, can trigger it.
+export const centerCameraRef = { current: null }
+
+// Toggles a click-mode shared electron's transfer: flips which orbital it sits
+// on and kicks off the eased transition (read each frame by the 3D driver).
+// Mutates the share object in place (same reference the store holds).
+export function toggleShareTransfer(sh) {
+  if (!sh) return
+  sh.clickTarget = (sh.clickTarget || 0) >= 1 ? 0 : 1
+  sh.transStart = sh.clickW || 0
+  sh.transP = 0
+  sh.transitioning = true
+}
+
 // Properties that can be keyframed.
 export const ANIM_PROPS = ['position', 'rotation', 'scale', 'opacity']
 

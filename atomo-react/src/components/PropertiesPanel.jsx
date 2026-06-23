@@ -347,7 +347,7 @@ function ShareElectrons({ layer }) {
 
   const [target, setTarget] = useState('')
   const [count, setCount] = useState(1)
-  const [mode, setMode] = useState('transfer')
+  const [mode, setMode] = useState('click')
   const [t0, setT0] = useState(1)
   const [duration, setDuration] = useState(1)
   const [period, setPeriod] = useState(2)
@@ -397,11 +397,19 @@ function ShareElectrons({ layer }) {
       <PropRow label="Mode">
         <select value={mode} onChange={(e) => setMode(e.target.value)}
           className="flex-1 px-1.5 py-1 bg-[#1e1e1e] border border-[#3d3d3d] rounded text-white text-[10px] outline-none focus:border-[#4c8bf5]/60 max-w-[120px]">
-          <option value="transfer">Transfer (one-shot)</option>
+          <option value="click">Click to transfer</option>
+          <option value="transfer">Transfer (timed)</option>
           <option value="oscillate">Oscillate (back & forth)</option>
         </select>
       </PropRow>
-      {mode === 'transfer' ? (
+      {mode === 'click' ? (
+        <>
+          <PropRow label="Travel (s)">
+            <DragInput label="D" value={duration} onChange={(v) => setDuration(Math.max(0.05, v))} step={0.1} min={0.05} color="#4af" />
+          </PropRow>
+          <p className="text-[9px] text-[#555]">Press <span className="text-[#c8a8ff]">T</span> (or click the electron) to send it to the other orbital. Again to bring it back.</p>
+        </>
+      ) : mode === 'transfer' ? (
         <>
           <PropRow label="At time (s)">
             <DragInput label="T" value={t0} onChange={(v) => setT0(Math.max(0, v))} step={0.1} min={0} color="#4af" />

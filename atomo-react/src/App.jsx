@@ -10,6 +10,7 @@ import ShareModal from './components/ShareModal'
 import KeyframePanel from './components/KeyframePanel'
 import GroupPanel from './components/GroupPanel'
 import { useStore } from './store/useStore'
+import { centerCameraRef, invalidateRef, toggleShareTransfer } from './anim'
 import { useEffect } from 'react'
 import { decompressFromEncodedURIComponent } from 'lz-string'
 
@@ -116,6 +117,15 @@ export default function App() {
         case 'g': case 'G': setTransformMode('translate'); break
         case 'r': case 'R': setTransformMode('rotate'); break
         case 's': case 'S': setTransformMode('scale'); break
+        case 'f': case 'F': centerCameraRef.current?.(); break
+        case 't': case 'T': {
+          // Transfer all click-mode shared electrons to the other orbital.
+          const all = useStore.getState().layers
+          let any = false
+          all.forEach(l => { if (l.share?.mode === 'click') { toggleShareTransfer(l.share); any = true } })
+          if (any) invalidateRef.current?.()
+          break
+        }
         case 'F2': e.preventDefault(); toggleScript(); break
         case 'Delete': if (selectedId) { removeLayer(selectedId); deselect(); } break
       }
@@ -140,7 +150,7 @@ export default function App() {
 
       {!viewerMode && (
         <p className="absolute bottom-3 left-1/2 -translate-x-1/2 text-[#444] font-mono text-[10px] tracking-wider pointer-events-none select-none hidden md:block">
-          G move · R rotate · S scale · D deselect · Del delete · F2 script
+          G move · R rotate · S scale · F center · T transfer e⁻ · D deselect · Del delete · F2 script
         </p>
       )}
     </div>

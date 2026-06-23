@@ -5,7 +5,7 @@ import { useStore } from '../store/useStore'
 import ParticleCloud from './ParticleCloud'
 import WaveSphere from './WaveSphere'
 import Label3D from './Label3D'
-import { sampleProp, invalidateRef } from '../anim'
+import { sampleProp, invalidateRef, centerCameraRef, toggleShareTransfer } from '../anim'
 import { PorbitalGeometry, DorbitalGeometry, ForbitalGeometry, getOrbitalPoint, createOrbitalPointCloud } from './OrbitalGeometry'
 
 // Circular texture for round points
@@ -196,9 +196,42 @@ export default function SceneContent({ orbitRef }) {
 // devices) and exposes invalidate() for scrubbing redraws.
 function TimelineDriver() {
   const invalidate = useThree(s => s.invalidate)
+  const camera = useThree(s => s.camera)
+  const controls = useThree(s => s.controls)
   const playing = useStore(s => s.timeline.playing)
 
   useEffect(() => { invalidateRef.current = invalidate }, [invalidate])
+
+  // Frame all scene objects: fit the camera to their bounding sphere and aim
+  // the orbit pivot at their center. Falls back to the default view if empty.
+  useEffect(() => {
+    centerCameraRef.current = () => {
+      const box = new THREE.Box3()
+      let any = false
+      meshRegistry.forEach((m) => {
+        if (!m || m.visible === false) return
+        box.expandByObject(m); any = true
+      })
+      const target = controls?.target || new THREE.Vector3()
+      if (!any || box.isEmpty()) {
+        target.set(0, 0, 0)
+        camera.position.set(0, 2, 6)
+      } else {
+        const center = box.getCenter(new THREE.Vector3())
+        const radius = Math.max(box.getSize(new THREE.Vector3()).length() / 2, 0.5)
+        const fov = (camera.fov || 60) * (Math.PI / 180)
+        const dist = (radius / Math.sin(fov / 2)) * 1.15
+        const dir = camera.position.clone().sub(target).normalize()
+        if (dir.lengthSq() === 0) dir.set(0, 0.3, 1).normalize()
+        target.copy(center)
+        camera.position.copy(center).add(dir.multiplyScalar(dist))
+      }
+      camera.lookAt(target)
+      controls?.update?.()
+      invalidate()
+    }
+    return () => { centerCameraRef.current = null }
+  }, [camera, controls, invalidate])
 
   useEffect(() => {
     if (!playing) return
@@ -370,8 +403,13 @@ function SceneObject({ layer }) {
   }, [layer.pointCloud, layer.type, layer.torusRadius, layer.pointDensity, isOrbitalType])
 
   const handleClick = (e) => {
-    if (viewerMode) return
     e.stopPropagation()
+    // Click-to-transfer shared electron: toggle which orbital it sits on.
+    if (layer.share?.mode === 'click') {
+      toggleShareTransfer(layer.share)
+      invalidateRef.current?.()
+    }
+    if (viewerMode) return
     if (e.shiftKey) {
       addToSelection(layer.id)
     } else {
@@ -432,7 +470,7 @@ function SceneObject({ layer }) {
       lp = [v.x + parentPos[0], v.y + parentPos[1], v.z + parentPos[2]]
     }
 
-    // Shared electron: orbits two orbitals and blends between them (transfer/oscillate)
+    // Shared electron: orbits two orbitals and blends between them (click/transfer/oscillate)
     if (layer.share && !kf?.position?.length) {
       const sh = layer.share
       sh.angle = (sh.angle || 0) + (sh.speed || 2) * delta
@@ -443,7 +481,19 @@ function SceneObject({ layer }) {
         orbitalPointWorld(A, sh.angle, _vecA)
         orbitalPointWorld(B, sh.angle, _vecB)
         let w
-        if (sh.mode === 'oscillate') {
+        if (sh.mode === 'click') {
+          // Click-driven transfer: animate the blend weight towards the
+          // clicked target (0 = from-orbital, 1 = to-orbital) over `duration`.
+          if (sh.transitioning) {
+            sh.transP = (sh.transP || 0) + delta / (sh.duration || 1)
+            if (sh.transP >= 1) { sh.transP = 1; sh.transitioning = false }
+            const e = sh.transP
+            const sm = e * e * (3 - 2 * e)
+            sh.clickW = (sh.transStart || 0) + ((sh.clickTarget || 0) - (sh.transStart || 0)) * sm
+            invalidateRef.current?.() // keep frames coming on `frameloop='demand'`
+          }
+          w = sh.clickW || 0
+        } else if (sh.mode === 'oscillate') {
           sh.clock = (sh.clock || 0) + delta
           const period = sh.period || 2
           w = 0.5 - 0.5 * Math.cos((sh.clock / period) * Math.PI * 2)

@@ -1,6 +1,7 @@
 import { useStore } from '../store/useStore'
 import { useRef } from 'react'
 import { PointerIcon, MoveIcon, RotateIcon, ScaleIcon } from './Icons'
+import { centerCameraRef } from '../anim'
 
 export default function Toolbar() {
   const {
@@ -95,6 +96,12 @@ export default function Toolbar() {
       </ToolBtn>
       <ToolBtn onClick={() => setTransformMode('scale')} active={transformMode === 'scale'} title="Escalar (S)">
         <ScaleIcon />
+      </ToolBtn>
+
+      <Divider />
+
+      <ToolBtn onClick={() => centerCameraRef.current?.()} title="Centrar cámara (F)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
       </ToolBtn>
 
       <Divider />
