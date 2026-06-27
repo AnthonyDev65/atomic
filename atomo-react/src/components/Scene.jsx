@@ -24,6 +24,7 @@ export let orbitControlsRef = { current: null }
 export default function Scene() {
   const bgColor = useStore(s => s.bgColor)
   const exposure = useStore(s => s.exposure)
+  const quality = useStore(s => s.quality)
   const orbitRef = useRef()
 
   // Detect low-end device. Note: navigator.deviceMemory is undefined on
@@ -35,6 +36,11 @@ export default function Scene() {
     const mem = navigator.deviceMemory
     return isMobile || cores <= 2 || (mem != null && mem <= 2)
   }, [isMobile])
+
+  // Bloom is off when the device can't handle it OR when the model's quality is
+  // set to 'low' — so a "low" model (incl. shared links) looks low everywhere,
+  // not just on weak hardware.
+  const noBloom = isLowEnd || quality === 'low'
 
   const dpr = isLowEnd ? [0.5, 1] : [1, 2]
   // Always render. 'demand' froze the scene on several devices (it can paint a
@@ -77,7 +83,7 @@ export default function Scene() {
 
       <CameraGizmo />
 
-      {isLowEnd ? <PlainRenderer /> : <BloomEffect />}
+      {noBloom ? <PlainRenderer /> : <BloomEffect />}
     </Canvas>
   )
 }

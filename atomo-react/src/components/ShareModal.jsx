@@ -5,7 +5,7 @@ import { compressToEncodedURIComponent } from 'lz-string'
 const DPASTE_API = 'https://dpaste.com/api/v2/'
 
 export default function ShareModal({ onClose }) {
-  const { layers, groups, viewerData, timeline, quality, bloomStrength, bloomRadius, bloomThreshold, emissiveIntensity, exposure, bgColor } = useStore()
+  const { layers, groups, viewerData, timeline, quality, smoothShapes, orbitalMode, bloomStrength, bloomRadius, bloomThreshold, emissiveIntensity, exposure, bgColor } = useStore()
   const [link, setLink] = useState('')
   const [copied, setCopied] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -16,7 +16,7 @@ export default function ShareModal({ onClose }) {
     // Carry the timeline so the shared viewer keeps the author's duration/loop
     // instead of falling back to the default 5s.
     anim: { duration: timeline.duration, loop: timeline.loop },
-    graphics: { quality, bloomStrength, bloomRadius, bloomThreshold, emissiveIntensity, exposure, bgColor }
+    graphics: { quality, smoothShapes, orbitalMode, bloomStrength, bloomRadius, bloomThreshold, emissiveIntensity, exposure, bgColor }
   }
 
   const generateURL = () => {
