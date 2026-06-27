@@ -1,6 +1,9 @@
-import { useRef } from 'react'
+import { useRef, useEffect } from 'react'
 import { useStore } from '../store/useStore'
 import { sampleProp, ANIM_PROPS, invalidateRef } from '../anim'
+
+// Playhead nudge step (seconds) when moving with the arrow keys.
+const ARROW_STEP = 0.1
 
 const PROP_META = {
   position: { label: 'Position', color: '#e5a' },
@@ -33,6 +36,28 @@ export default function KeyframePanel() {
   } = store
   const trackRef = useRef(null)
 
+  // Arrow keys nudge the playhead: ←/→ by ARROW_STEP, Shift+←/→ snaps to the
+  // adjacent whole second.
+  useEffect(() => {
+    if (!timelineOpen || viewerMode) return
+    const onKey = (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
+      e.preventDefault()
+      const s = useStore.getState()
+      const cur = s.timeline.time
+      const dur = s.timeline.duration
+      const dir = e.key === 'ArrowRight' ? 1 : -1
+      const next = e.shiftKey
+        ? (dir > 0 ? Math.floor(cur + 1) : Math.ceil(cur - 1)) // snap to whole second
+        : cur + dir * ARROW_STEP
+      s.setTime(Math.min(dur, Math.max(0, +next.toFixed(4))))
+      invalidateRef.current?.()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [timelineOpen, viewerMode])
+
   if (!timelineOpen || viewerMode) return null
 
   const isGroup = !!group && !layer
@@ -45,21 +70,22 @@ export default function KeyframePanel() {
   const { time, duration, playing, loop, recording } = tl
   const pct = (t) => `${Math.min(100, Math.max(0, (t / duration) * 100))}%`
 
-  const scrubTo = (clientX) => {
+  const scrubTo = (clientX, snap) => {
     const el = trackRef.current
     if (!el) return
     const rect = el.getBoundingClientRect()
-    const t = ((clientX - rect.left) / rect.width) * duration
+    let t = ((clientX - rect.left) / rect.width) * duration
+    if (snap) t = Math.round(t) // Shift magnetizes to whole seconds
     setTime(Math.min(duration, Math.max(0, t)))
     invalidateRef.current?.()
   }
   const onScrubDown = (e) => {
     e.currentTarget.setPointerCapture(e.pointerId)
-    scrubTo(e.clientX)
+    scrubTo(e.clientX, e.shiftKey)
   }
   const onScrubMove = (e) => {
     if (e.buttons !== 1) return
-    scrubTo(e.clientX)
+    scrubTo(e.clientX, e.shiftKey)
   }
 
   const toggleKey = (prop) => {

@@ -112,6 +112,17 @@ export default function App() {
         }
         return
       }
+      // Ctrl+Z undo · Ctrl+Shift+Z / Ctrl+Y redo
+      if ((e.key === 'z' || e.key === 'Z') && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault()
+        if (e.shiftKey) useStore.getState().redo(); else useStore.getState().undo()
+        return
+      }
+      if ((e.key === 'y' || e.key === 'Y') && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault(); useStore.getState().redo(); return
+      }
+      // Don't let Ctrl/Cmd+letter combos (save, etc.) trigger single-key tools.
+      if (e.ctrlKey || e.metaKey) return
       switch (e.key) {
         case 'd': case 'D': case 'Escape': deselect(); break
         case 'g': case 'G': setTransformMode('translate'); break

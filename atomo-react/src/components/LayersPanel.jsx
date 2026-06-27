@@ -1,6 +1,23 @@
 import { useStore } from '../store/useStore'
 import { useState, useRef } from 'react'
 import { SphereIcon, BoxIcon, TorusIcon, PlaneIcon } from './Icons'
+import { meshRegistry } from './SceneContent'
+
+// Pull a layer out of a group while keeping it where it visually is: bake the
+// live mesh world transform (which already includes the group's offset/rotation)
+// into the layer's own coordinates. Falls back to a plain removal for objects
+// without a registered mesh (particles, bonds, …).
+function extractKeepingWorldTransform(groupId, layerId) {
+  const st = useStore.getState()
+  const mesh = meshRegistry.get(layerId)
+  if (mesh) {
+    st.extractFromGroup(groupId, layerId,
+      [mesh.position.x, mesh.position.y, mesh.position.z],
+      [mesh.rotation.x, mesh.rotation.y, mesh.rotation.z])
+  } else {
+    st.removeFromGroup(groupId, layerId)
+  }
+}
 
 const SHAPES = [
   { id: 'sphere', label: 'Sphere', icon: SphereIcon },
@@ -17,12 +34,12 @@ const SHAPES = [
 ]
 
 export default function LayersPanel() {
-  const { leftPanelOpen, viewerMode } = useStore()
+  const { leftPanelOpen, viewerMode, timelineOpen } = useStore()
 
   if (!leftPanelOpen || viewerMode) return null
 
   return (
-    <div className="absolute top-12 md:top-3 left-2 md:left-3 bottom-2 md:bottom-3 w-[min(18rem,calc(100vw-1rem))] md:w-56 flex flex-col gap-2 z-40">
+    <div className={`absolute top-12 md:top-3 left-2 md:left-3 w-[min(18rem,calc(100vw-1rem))] md:w-56 flex flex-col gap-2 z-40 ${timelineOpen ? 'bottom-[208px]' : 'bottom-2 md:bottom-3'}`}>
       <AddPanel />
       <LayersListPanel />
     </div>
@@ -361,7 +378,7 @@ function LayersListPanel() {
     if (dragItem.type === 'group') setGroupParent(dragItem.id, null)
     else {
       const parent = groups.find(g => g.children.includes(dragItem.id))
-      if (parent) removeFromGroup(parent.id, dragItem.id)
+      if (parent) extractKeepingWorldTransform(parent.id, dragItem.id)
     }
     setDragItem(null)
   }
@@ -452,7 +469,7 @@ function GroupItem({ group, groups, layers, selectedId, selectedGroupId, dragIte
           {children.map(layer => (
             <div key={layer.id} className="flex items-center">
               <div className="flex-1"><LayerItem layer={layer} selectedId={selectedId} dragItem={dragItem} setDragItem={setDragItem} /></div>
-              <button onClick={() => removeFromGroup(group.id, layer.id)} className="text-[#444] hover:text-[#888] text-[7px] px-0.5">✕</button>
+              <button onClick={() => extractKeepingWorldTransform(group.id, layer.id)} className="text-[#444] hover:text-[#888] text-[7px] px-0.5">✕</button>
             </div>
           ))}
           {count === 0 && <p className="text-[#444] text-[9px] py-1.5 text-center">Drop objects or groups here</p>}

@@ -2,9 +2,10 @@ import { useStore } from '../store/useStore'
 import { useState } from 'react'
 import DragInput from './DragInput'
 import { ANIM_PROPS, invalidateRef } from '../anim'
+import { meshRegistry } from './SceneContent'
 
 export default function PropertiesPanel() {
-  const { layers, selectedId, rightPanelOpen, viewerMode, updateLayer, removeLayer, deselect, addKeyframe } = useStore()
+  const { layers, selectedId, rightPanelOpen, viewerMode, updateLayer, removeLayer, deselect, addKeyframe, timelineOpen } = useStore()
 
   if (!rightPanelOpen || viewerMode || !selectedId) return null
 
@@ -23,8 +24,19 @@ export default function PropertiesPanel() {
   const scale = layer.scale || [1, 1, 1]
   const rot = layer.rotation || [0, 0, 0]
 
+  // Turn an orbiting / shared electron into a plain static sphere frozen at its
+  // current world position. Reads the live mesh world transform (which already
+  // bakes in any group offset), pulls it out of its group, and drops the
+  // orbital/share that was driving it — so it stays exactly where it is.
+  const detach = () => {
+    const mesh = meshRegistry.get(layer.id)
+    const p = mesh ? [mesh.position.x, mesh.position.y, mesh.position.z] : pos
+    const r = mesh ? [mesh.rotation.x, mesh.rotation.y, mesh.rotation.z] : rot
+    useStore.getState().detachLayer(selectedId, p, r)
+  }
+
   return (
-    <div className="absolute top-12 right-2 md:right-3 w-[min(15rem,calc(100vw-1rem))] md:w-64 max-h-[calc(100dvh-4.5rem)] overflow-y-auto bg-[#252525] border border-[#3d3d3d] rounded-lg shadow-xl z-40">
+    <div className={`absolute top-12 right-2 md:right-3 w-[min(15rem,calc(100vw-1rem))] md:w-64 overflow-y-auto bg-[#252525] border border-[#3d3d3d] rounded-lg shadow-xl z-40 ${timelineOpen ? 'max-h-[calc(100dvh-4.5rem-208px)]' : 'max-h-[calc(100dvh-4.5rem)]'}`}>
       {/* Header */}
       <div className="sticky top-0 bg-[#252525] border-b border-[#3d3d3d] px-3 py-2.5 z-10">
         <div className="flex items-center justify-between">
@@ -62,6 +74,17 @@ export default function PropertiesPanel() {
             </PropRow>
           )}
         </Section>
+
+        {/* Detach an electron from its orbit / share so it becomes a free sphere */}
+        {(layer.orbital || layer.share) && (
+          <Section title="Electron">
+            <button onClick={detach}
+              className="w-full py-1.5 rounded bg-[#2a2030] border border-[#5a3a6a] text-[#d8a8ff] text-[10px] font-medium hover:bg-[#352540] transition">
+              Detach → free sphere here
+            </button>
+            <p className="text-[9px] text-[#555] mt-1">Stops orbiting / sharing and freezes it at its current position.</p>
+          </Section>
+        )}
 
         {/* Transform */}
         <Section title="Position">
@@ -271,13 +294,10 @@ function AddElectronToOrbit({ layer }) {
     const rot = layer.rotation || [0, 0, 0]
     const pathType = layer.type // 'torus', 'orbital_p', 'orbital_d', 'orbital_f'
 
-    // Find how many electrons already orbit this path
-    const existing = layers.filter(l => l.orbital &&
-      l.orbital.pathType === pathType &&
-      Math.abs(l.orbital.tiltX - rot[0]) < 0.05 &&
-      Math.abs(l.orbital.tiltZ - rot[2]) < 0.05 &&
-      Math.abs(l.orbital.radius - radius) < 0.05
-    )
+    // Electrons already orbiting THIS exact orbital, matched by identity
+    // (parentId) — not by geometry, which wrongly grouped electrons from
+    // different toruses that happened to share radius/tilt.
+    const existing = layers.filter(l => l.orbital && l.orbital.parentId === layer.id)
 
     const count = existing.length + 1
     const angleStep = (Math.PI * 2) / count

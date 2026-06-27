@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { computeGroupBounds } from '../groupBounds'
 
 // Detected once: weak GPUs/mobiles default to faster, lower-detail rendering.
 // deviceMemory is undefined on Safari/Firefox/iPad — only use it when present
@@ -60,6 +61,18 @@ export const useStore = create((set, get) => ({
   configOpen: false,
   viewerSetupOpen: false,
   shareOpen: false,
+
+  // Open file handle (File System Access API) so "Save" can overwrite the file
+  // the user opened, instead of downloading a new one. Null = no bound file.
+  fileHandle: null,
+  fileName: null,
+
+  // Undo/redo history of { layers, groups } snapshots (captured by a store
+  // subscription; see bottom of file). _applying suppresses capture while
+  // restoring.
+  _history: [],
+  _future: [],
+  _applying: false,
 
   // Grid
   showGrid: true,
@@ -224,6 +237,20 @@ export const useStore = create((set, get) => ({
   removeFromGroup: (groupId, layerId) => set((s) => ({
     groups: s.groups.map(g => g.id === groupId ? { ...g, children: g.children.filter(c => c !== layerId) } : g)
   })),
+  // Remove a layer from a group and bake the given world position/rotation into
+  // it (one atomic update), so it stays put visually instead of snapping back
+  // to its pre-group base transform.
+  extractFromGroup: (groupId, layerId, position, rotation) => set((s) => ({
+    groups: s.groups.map(g => g.id === groupId ? { ...g, children: g.children.filter(c => c !== layerId) } : g),
+    layers: s.layers.map(l => l.id === layerId ? { ...l, position, rotation } : l),
+  })),
+  // Detach a layer into a free static object: drop its orbital/share animation,
+  // pull it out of any group, and bake the given world position/rotation — all
+  // atomically so it freezes exactly where it visually was.
+  detachLayer: (layerId, position, rotation) => set((s) => ({
+    groups: s.groups.map(g => g.children.includes(layerId) ? { ...g, children: g.children.filter(c => c !== layerId) } : g),
+    layers: s.layers.map(l => l.id === layerId ? { ...l, position, rotation, orbital: undefined, share: undefined } : l),
+  })),
   // Nest a group under another (or pass null/undefined to make it a root group).
   // Blocks cycles (can't parent a group to itself or one of its descendants).
   setGroupParent: (groupId, parentId) => set((s) => {
@@ -265,6 +292,29 @@ export const useStore = create((set, get) => ({
   clearGroupKeyframes: (groupId) => set((s) => ({
     groups: s.groups.map(g => g.id === groupId ? { ...g, keyframes: undefined } : g)
   })),
+  // Pin the group's rotate/translate pivot to the geometric (bounding-box)
+  // center of its descendant layers instead of the default centroid (mean of
+  // positions). For atoms the centroid is dragged off-center by the dense
+  // nucleus and uneven electron counts, while the bbox center lands on the
+  // true visual center (the concentric orbital rings' center). Safe to call:
+  // with no group rotation the pivot cancels out of the render transform
+  // (lp = pivot + (lp - pivot) + gp), so nothing visibly moves. Passing
+  // pivot: undefined restores the automatic centroid.
+  centerGroupOrigin: (groupId) => set((s) => {
+    const { layerIds } = descendantsOf(s.groups, groupId)
+    const layerById = new Map(s.layers.map(l => [l.id, l]))
+    const descLayers = layerIds.map(id => layerById.get(id))
+    const { center } = computeGroupBounds(descLayers, layerById)
+    return { groups: s.groups.map(g => g.id === groupId ? { ...g, pivot: center } : g) }
+  }),
+  // Set the pivot directly (e.g. from the Origin X/Y/Z inputs). Pass undefined
+  // to fall back to the automatic geometric center.
+  setGroupPivot: (groupId, pivot) => set((s) => ({
+    groups: s.groups.map(g => g.id === groupId ? { ...g, pivot: pivot ? [...pivot] : undefined } : g)
+  })),
+  resetGroupOrigin: (groupId) => set((s) => ({
+    groups: s.groups.map(g => g.id === groupId ? { ...g, pivot: undefined } : g)
+  })),
   // Duplicate a whole group subtree: clones every descendant layer AND nested
   // subgroup with fresh ids, remaps orbital/label/bond/share references plus
   // group parent links, and deep-copies keyframes and transforms.
@@ -292,8 +342,10 @@ export const useStore = create((set, get) => ({
       .filter(Boolean)
       .map(l => ({ ...l, id: idMap.get(l.id) }))
     newLayers.forEach(nl => {
-      const p = nl.position || [0, 0, 0]
-      nl.position = [p[0] + offset, p[1] + offset, p[2]]
+      // NOTE: do NOT offset child positions here. Shifting the children would
+      // move the group's pivot (its centroid), so the copy would render in a
+      // different spot than the original despite identical group.position. The
+      // offset is applied to the top group's position instead (below).
       if (nl.orbital) {
         nl.orbital = { ...nl.orbital }
         if (nl.orbital.parentId && idMap.has(nl.orbital.parentId)) nl.orbital.parentId = idMap.get(nl.orbital.parentId)
@@ -322,7 +374,12 @@ export const useStore = create((set, get) => ({
         // re-link to their cloned parent.
         parentId: g.id === groupId ? g.parentId : groupIdMap.get(g.parentId),
         keyframes: cloneKf(g.keyframes),
-        position: g.position ? [...g.position] : undefined,
+        // Offset only the top group so the copy is visibly nudged but keeps the
+        // same pivot↔position relationship as the original (same position
+        // values ⇒ same physical place).
+        position: g.id === groupId
+          ? [(g.position?.[0] || 0) + offset, (g.position?.[1] || 0) + offset, (g.position?.[2] || 0)]
+          : (g.position ? [...g.position] : undefined),
         rotation: g.rotation ? [...g.rotation] : undefined,
       }))
 
@@ -349,4 +406,59 @@ export const useStore = create((set, get) => ({
   updateLayer: (id, data) => set((s) => ({ layers: s.layers.map(l => l.id === id ? { ...l, ...data } : l) })),
   setLayers: (layers) => set({ layers }),
   clearLayers: () => set({ layers: [], selectedId: null, groups: [] }),
+
+  // === File binding (File System Access API) ===
+  setFileHandle: (handle, name) => set({ fileHandle: handle, fileName: name || handle?.name || null }),
+
+  // === Undo / redo ===
+  undo: () => {
+    const st = get()
+    if (!st._history.length) return
+    const prev = st._history[st._history.length - 1]
+    const cur = { layers: cloneArr(st.layers), groups: cloneArr(st.groups) }
+    set({
+      _applying: true,
+      _history: st._history.slice(0, -1),
+      _future: [cur, ...st._future].slice(0, 60),
+      layers: prev.layers, groups: prev.groups,
+      selectedId: null, selectedIds: [], selectedGroupId: null,
+    })
+    set({ _applying: false })
+  },
+  redo: () => {
+    const st = get()
+    if (!st._future.length) return
+    const next = st._future[0]
+    const cur = { layers: cloneArr(st.layers), groups: cloneArr(st.groups) }
+    set({
+      _applying: true,
+      _future: st._future.slice(1),
+      _history: [...st._history, cur].slice(-60),
+      layers: next.layers, groups: next.groups,
+      selectedId: null, selectedIds: [], selectedGroupId: null,
+    })
+    set({ _applying: false })
+  },
 }))
+
+// Deep clone of serializable layer/group state for history snapshots.
+const cloneArr = (a) => JSON.parse(JSON.stringify(a))
+
+// Capture undo snapshots whenever layers or groups change. Rapid edits (slider
+// / gizmo drags) within 500ms fold into a single step so one Ctrl+Z reverts the
+// whole gesture rather than each tiny increment.
+let _lastCapture = 0
+useStore.subscribe((state, prev) => {
+  if (state._applying) return
+  if (state.layers === prev.layers && state.groups === prev.groups) return
+  const now = Date.now()
+  const coalesce = now - _lastCapture < 500 && useStore.getState()._history.length > 0
+  _lastCapture = now
+  if (coalesce) return
+  // Snapshot the pre-change state now, but commit it to the store in a
+  // microtask. Writing _history synchronously here (re-entrant setState inside
+  // a subscriber) can disrupt the React commit of the change that triggered it
+  // — e.g. a position edit updating the panel but not the mesh.
+  const snap = { layers: cloneArr(prev.layers), groups: cloneArr(prev.groups) }
+  queueMicrotask(() => useStore.setState(s => ({ _history: [...s._history, snap].slice(-60), _future: [] })))
+})

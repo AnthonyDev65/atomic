@@ -7,6 +7,7 @@ import WaveSphere from './WaveSphere'
 import Label3D from './Label3D'
 import { sampleProp, invalidateRef, centerCameraRef, toggleShareTransfer } from '../anim'
 import { PorbitalGeometry, DorbitalGeometry, ForbitalGeometry, getOrbitalPoint, createOrbitalPointCloud } from './OrbitalGeometry'
+import { descendantLayerIds, computeGroupBounds } from '../groupBounds'
 
 // Circular texture for round points
 const circleTexture = (() => {
@@ -37,17 +38,6 @@ export const groupPivots = new Map()
 export const groupById = new Map()
 
 // All layer ids contained in a group, including those in nested subgroups.
-function descendantLayerIds(groups, groupId) {
-  const out = []
-  const walk = (gid) => {
-    const g = groups.find(x => x.id === gid)
-    if (!g) return
-    g.children.forEach(id => out.push(id))
-    groups.forEach(x => { if (x.parentId === gid) walk(x.id) })
-  }
-  walk(groupId)
-  return out
-}
 
 // --- Shared caches (avoid recreating identical textures/geometries per object) ---
 // A heavy nucleus has hundreds of identical 'P'/'N' spheres; caching collapses
@@ -176,10 +166,14 @@ export default function SceneContent({ orbitRef }) {
     })
     const layerById = new Map(layers.map(l => [l.id, l]))
     groups.forEach(g => {
-      const ids = descendantLayerIds(groups, g.id)
-      let cx = 0, cy = 0, cz = 0, n = 0
-      ids.forEach(id => { const l = layerById.get(id); if (!l) return; const p = l.position || [0, 0, 0]; cx += p[0]; cy += p[1]; cz += p[2]; n++ })
-      groupPivots.set(g.id, n ? [cx / n, cy / n, cz / n] : [0, 0, 0])
+      // An explicit pivot override (set via the Origin inputs) wins; otherwise
+      // use the geometric center of the subtree's true bounds so the group
+      // rotates/translates around its real visual center (orbital electrons'
+      // placeholder positions are resolved to their orbit center inside
+      // computeGroupBounds).
+      if (g.pivot) { groupPivots.set(g.id, [...g.pivot]); return }
+      const descLayers = descendantLayerIds(groups, g.id).map(id => layerById.get(id))
+      groupPivots.set(g.id, computeGroupBounds(descLayers, layerById).center)
     })
   }, [layers, groups])
 
@@ -316,16 +310,14 @@ function GroupGizmo({ group, layers, mode, orbitRef }) {
   const snap = useSnap()
   const gizmoMode = mode === 'scale' ? 'translate' : mode
 
-  // Fixed pivot center = mean of children base positions
+  // Pivot center = explicit override if set, else the geometric center of the
+  // subtree's true bounds. Must match groupPivots above so the gizmo and the
+  // rendered transform agree.
   const base = useMemo(() => {
-    if (layers.length === 0) return [0, 0, 0]
-    const sum = [0, 0, 0]
-    layers.forEach(l => {
-      const p = l.position || [0, 0, 0]
-      sum[0] += p[0]; sum[1] += p[1]; sum[2] += p[2]
-    })
-    return [sum[0] / layers.length, sum[1] / layers.length, sum[2] / layers.length]
-  }, [layers])
+    if (group.pivot) return [...group.pivot]
+    const layerById = new Map(layers.map(l => [l.id, l]))
+    return computeGroupBounds(layers, layerById).center
+  }, [layers, group.pivot])
 
   const gpos = group.position || [0, 0, 0]
   const grot = group.rotation || [0, 0, 0]
